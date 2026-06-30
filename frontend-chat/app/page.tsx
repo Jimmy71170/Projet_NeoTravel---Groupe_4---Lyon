@@ -39,7 +39,7 @@ export default function Home() {
   const [loginError, setLoginError] = useState("");
 
   const WEBHOOK_URL =
-    "http://localhost:5678/webhook/72d87e82-5752-4950-8a92-b04e60229aff";
+    "http://localhost:5678/webhook/neotravel-mvp";
 
   async function sendMessage() {
     if (!input.trim() || loading) return;
