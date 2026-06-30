@@ -35,7 +35,8 @@ const devisItems = ["Devis en préparation", "Devis envoyés"];
 const VALID_ID = "EquipeNeotravel";
 const VALID_MP = "Groupe17@!epitechwesh!";
 
-const WEBHOOK_URL = "http://localhost:5678/webhook/neotravel-mvp";
+const WEBHOOK_URL =
+  process.env.NEXT_PUBLIC_N8N_WEBHOOK_URL!;
 
 function createSessionId() {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -126,7 +127,11 @@ export default function Home() {
     setInput("");
     setLoading(true);
 
+
     try {
+      if (!WEBHOOK_URL) {
+        throw new Error("Webhook URL manquante");
+      }
       const res = await fetch(WEBHOOK_URL, {
         method: "POST",
         headers: {
