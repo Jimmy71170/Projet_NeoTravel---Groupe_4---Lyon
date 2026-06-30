@@ -1,0 +1,827 @@
+{
+  "name": "WF_010_Send_Email",
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "context",
+              "type": "object"
+            },
+            {
+              "name": "email_type"
+            },
+            {
+              "name": "reason"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        400,
+        -16
+      ],
+      "id": "86a191d5-cdc3-4792-9ea0-fded4f6da798",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\n\nconst input = $input.first()?.json || {};\nconst context = input.context || {};\n\nconst client = context.client || {};\nconst trajet = context.trajet || {};\nconst devis = context.devis || {};\nconst pdf = context.pdf || {};\n\nfunction escapeHtml(value) {\n  return String(value ?? \"\")\n    .replaceAll(\"&\", \"&amp;\")\n    .replaceAll(\"<\", \"&lt;\")\n    .replaceAll(\">\", \"&gt;\")\n    .replaceAll('\"', \"&quot;\")\n    .replaceAll(\"'\", \"&#039;\");\n}\n\nconst commercialEmail =\n  input.commercial_email ||\n  context.commercial?.email ||\n  \"jimmyribeiro69@gmail.com\";\n\nconst nomClient = [client.prenom, client.nom].filter(Boolean).join(\" \") || client.nom || \"Client\";\nconst subject = `Validation commerciale requise - Devis NeoTravel - ${nomClient}`;\n\nconst html = `\n<p>Bonjour,</p>\n\n<p>Un devis NeoTravel a été généré et nécessite une validation commerciale.</p>\n\n<h3>Synthèse</h3>\n<ul>\n  <li><strong>Client :</strong> ${escapeHtml(nomClient)}</li>\n  <li><strong>Email :</strong> ${escapeHtml(client.email || \"Non renseigné\")}</li>\n  <li><strong>Trajet :</strong> ${escapeHtml(trajet.depart || \"\")} → ${escapeHtml(trajet.destination || \"\")}</li>\n  <li><strong>Date :</strong> ${escapeHtml(trajet.date_depart || \"Non renseignée\")}</li>\n  <li><strong>Passagers :</strong> ${escapeHtml(trajet.nb_passagers || \"Non renseigné\")}</li>\n  <li><strong>Total TTC :</strong> ${escapeHtml(devis.total_ttc || \"Non renseigné\")} €</li>\n</ul>\n\n${\n  pdf.drive_view_url\n    ? `<p><a href=\"${escapeHtml(pdf.drive_view_url)}\">Consulter le devis PDF</a></p>`\n    : `<p>Aucun lien PDF trouvé.</p>`\n}\n\n<p>Action attendue : vérifier puis valider ou demander une modification.</p>\n`;\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Email de validation commerciale préparé.\",\n      context,\n      email: {\n        type: \"COMMERCIAL_VALIDATION\",\n        to: commercialEmail,\n        subject,\n        html\n      },\n      result: {\n        entity: \"email\",\n        type: \"COMMERCIAL_VALIDATION\"\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        -224
+      ],
+      "id": "8896f62b-eefb-4037-9b41-5fcfff26b82f",
+      "name": "Generate_HTML_Commercial_Validation"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\n\nconst input = $input.first()?.json || {};\nconst context = input.context || {};\n\nconst client = context.client || {};\nconst trajet = context.trajet || {};\nconst errors = input.errors || context.errors || [];\n\nfunction escapeHtml(value) {\n  return String(value ?? \"\")\n    .replaceAll(\"&\", \"&amp;\")\n    .replaceAll(\"<\", \"&lt;\")\n    .replaceAll(\">\", \"&gt;\")\n    .replaceAll('\"', \"&quot;\")\n    .replaceAll(\"'\", \"&#039;\");\n}\n\nconst commercialEmail =\n  input.commercial_email ||\n  context.commercial?.email ||\n  \"jimmyribeiro69@gmail.com\";\n\nconst nomClient = [client.prenom, client.nom].filter(Boolean).join(\" \") || client.nom || \"Client\";\nconst reason = input.reason || context.complexity?.reason || \"Escalade commerciale demandée.\";\nconst subject = `Escalade commerciale - Demande NeoTravel - ${nomClient}`;\n\nconst errorsHtml = errors.length\n  ? errors.map(e => `<li>${escapeHtml(e.message || e.code || JSON.stringify(e))}</li>`).join(\"\")\n  : \"<li>Aucune erreur technique transmise.</li>\";\n\nconst html = `\n<p>Bonjour,</p>\n\n<p>Une demande NeoTravel nécessite une reprise commerciale humaine.</p>\n\n<h3>Synthèse</h3>\n<ul>\n  <li><strong>Client :</strong> ${escapeHtml(nomClient)}</li>\n  <li><strong>Email :</strong> ${escapeHtml(client.email || \"Non renseigné\")}</li>\n  <li><strong>Trajet :</strong> ${escapeHtml(trajet.depart || \"\")} → ${escapeHtml(trajet.destination || \"\")}</li>\n  <li><strong>Date :</strong> ${escapeHtml(trajet.date_depart || \"Non renseignée\")}</li>\n  <li><strong>Passagers :</strong> ${escapeHtml(trajet.nb_passagers || \"Non renseigné\")}</li>\n</ul>\n\n<h3>Motif</h3>\n<p>${escapeHtml(reason)}</p>\n\n<h3>Éléments transmis</h3>\n<ul>${errorsHtml}</ul>\n\n<p>Action attendue : reprendre le dossier et décider de la suite commerciale.</p>\n`;\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Email d'escalade commerciale préparé.\",\n      context,\n      email: {\n        type: \"COMMERCIAL_ESCALATION\",\n        to: commercialEmail,\n        subject,\n        html\n      },\n      result: {\n        entity: \"email\",\n        type: \"COMMERCIAL_ESCALATION\"\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        -16
+      ],
+      "id": "da537c24-0e85-4ab4-bec0-2a10e44a4036",
+      "name": "Generate_HTML_Commercial_Escalation"
+    },
+    {
+      "parameters": {
+        "sendTo": "jimmyribeiro69@gmail.com",
+        "subject": "={{$json.email.subject}}",
+        "message": "={{$json.email.html}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        -224
+      ],
+      "id": "27b374c2-5afc-44a7-833c-1196673ecd23",
+      "name": "Send_Commercial_Validation_Email",
+      "webhookId": "a3ef2a09-dc6a-4713-8fb6-0f9ef2c353e9",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "3s03BlEAN3NuYf8m",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "jimmyribeiro69@gmail.com",
+        "subject": "={{$json.email.subject}}",
+        "message": "={{$json.email.html}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        -16
+      ],
+      "id": "ec5203e8-dc7b-4eac-b746-6ae75a89ac82",
+      "name": "Send_Commercial_Escalation_Email",
+      "webhookId": "6770f5eb-1859-449f-bf64-b6780fda7ea1",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "3s03BlEAN3NuYf8m",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// WF_010_Send_Email\n// Retour Tool\n// Version : 3.0\n// =======================================\n\nconst now = new Date().toISOString();\n\nconst input = $(\"Generate_HTML_Commercial_Validation\").first().json || {};\n\nconst context = JSON.parse(JSON.stringify(input.context || {}));\nconst email = input.email || {};\n\ncontext.email = {\n  ...(context.email || {}),\n  type: \"COMMERCIAL_VALIDATION\",\n  recipient: email.to || null,\n  subject: email.subject || null,\n  sent: true,\n  sent_at: now,\n  status: \"SENT\"\n};\n\ncontext.last_tool = \"WF_010_Send_Email\";\ncontext.last_update_at = now;\n\nreturn [\n{\njson:{\n\nsuccess:true,\n\nstatus:\"EMAIL_SENT\",\n\ntool:\"WF_010_Send_Email\",\n\nversion:\"3.0\",\n\ntimestamp:now,\n\ncontext,\n\nmessage:\"La demande de validation commerciale a été envoyée.\",\n\nnext_action:\"finish\",\n\nnext_workflow:\"\",\n\nnext_payload:{},\n\nerror:null\n\n}\n}\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        -224
+      ],
+      "id": "51c522b4-09e0-4a5a-8147-0eddc85cea33",
+      "name": "Retour_Tool_Commercial_Validation_Email"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// WF_010_Send_Email\n// Retour Tool\n// Version : 3.0\n// =======================================\n\nconst now = new Date().toISOString();\n\nconst input = $(\"Generate_HTML_Client_Quote\").first().json || {};\n\nconst context = JSON.parse(JSON.stringify(input.context || {}));\n\nconst email = input.email || {};\n\nlet airtableResult = {};\n\ntry {\n\n  airtableResult = $(\"Update_Devis_Status\").first().json || {};\n\n} catch {\n\n  airtableResult = {};\n\n}\n\nconst airtableUpdated = !!airtableResult.id;\n\ncontext.email = {\n  ...(context.email || {}),\n  type: \"CLIENT_QUOTE\",\n  recipient: email.to || null,\n  subject: email.subject || null,\n  sent: true,\n  sent_at: now,\n  status: \"SENT\"\n};\n\ncontext.devis = {\n  ...(context.devis || {}),\n  status: airtableUpdated\n    ? \"en attente retour client\"\n    : context.devis?.status,\n  email_sent_at: now\n};\n\ncontext.last_tool = \"WF_010_Send_Email\";\ncontext.last_update_at = now;\n\nreturn [\n{\njson:{\n\nsuccess:true,\n\nstatus:\"EMAIL_SENT\",\n\ntool:\"WF_010_Send_Email\",\n\nversion:\"3.0\",\n\ntimestamp:now,\n\ncontext,\n\nmessage: airtableUpdated\n  ? \"Le devis a été envoyé au client.\"\n  : \"Le devis a été envoyé au client mais le statut Airtable n'a pas pu être confirmé.\",\n\nnext_action:\"finish\",\n\nnext_workflow:\"\",\n\nnext_payload:{},\n\nerror:null\n\n}\n}\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        -16
+      ],
+      "id": "9de577d7-a76b-40ac-807f-af1a6a48f97e",
+      "name": "Retour_Tool_Commercial_Escalation_Email"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.email_type }}",
+                    "rightValue": "COMMERCIAL_VALIDATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "94f74fe9-3bfb-4e4c-8c44-cf1ef5f963b6"
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "c87357f7-ca7a-4631-bbca-38a8a9c03874",
+                    "leftValue": "={{ $json.email_type }}",
+                    "rightValue": "COMMERCIAL_ESCALATION",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "a80317f5-be10-4f26-aad0-b60a892e7539",
+                    "leftValue": "={{ $json.email_type }}",
+                    "rightValue": "CLIENT_QUOTE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        624,
+        -32
+      ],
+      "id": "e93b4501-59b7-4824-9055-f0d0bbfd3a2f",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\n\nconst input = $(\"Generate_HTML_Client_Quote\").first().json || {};\nconst context = JSON.parse(JSON.stringify(input.context || {}));\nconst email = input.email || {};\n\nlet airtableResult = {};\n\ntry {\n  airtableResult = $(\"Update_Devis_Status\").first().json || {};\n} catch (e) {\n  airtableResult = {};\n}\n\nconst airtableUpdated = !!airtableResult.id;\n\ncontext.email = {\n  ...(context.email || {}),\n  type: \"CLIENT_QUOTE\",\n  recipient: email.to || null,\n  subject: email.subject || null,\n  sent: true,\n  sent_at: now,\n  status: \"SENT\"\n};\n\ncontext.devis = {\n  ...(context.devis || {}),\n  status: airtableUpdated ? \"en attente retour client\" : context.devis?.status,\n  email_sent_at: now\n};\n\ncontext.last_update_at = now;\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: airtableUpdated\n        ? \"Le devis a été envoyé au client et le statut Airtable a été mis à jour.\"\n        : \"Le devis a été envoyé au client, mais la mise à jour Airtable n'a pas été confirmée.\",\n      context,\n      result: {\n        entity: \"email\",\n        type: \"CLIENT_QUOTE\",\n        recipient: email.to || null,\n        airtable_updated: airtableUpdated\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        192
+      ],
+      "id": "f1dc92d0-beaa-43be-b961-5f8843946990",
+      "name": "Retour_Tool_Envoie_Client_Quote"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\n\nconst input = $input.first()?.json || {};\nconst context = input.context || {};\n\nconst client = context.client || {};\nconst trajet = context.trajet || {};\nconst devis = context.devis || {};\nconst pdf = context.pdf || {};\n\nfunction isEmpty(value) {\n  return value === undefined || value === null || value === \"\" || String(value).trim() === \"\";\n}\n\nfunction escapeHtml(value) {\n  return String(value ?? \"\")\n    .replaceAll(\"&\", \"&amp;\")\n    .replaceAll(\"<\", \"&lt;\")\n    .replaceAll(\">\", \"&gt;\")\n    .replaceAll('\"', \"&quot;\")\n    .replaceAll(\"'\", \"&#039;\");\n}\n\nconst errors = [];\n\nif (isEmpty(client.email)) errors.push(\"context.client.email manquant\");\nif (isEmpty(devis.airtable_record_id)) errors.push(\"context.devis.airtable_record_id manquant\");\nif (isEmpty(pdf.drive_view_url)) errors.push(\"context.pdf.drive_view_url manquant\");\n\nif (errors.length > 0) {\n  return [\n    {\n      json: {\n        success: false,\n        message: \"Impossible de préparer l'email client : données manquantes.\",\n        context,\n        result: {\n          entity: \"email\",\n          errors\n        }\n      }\n    }\n  ];\n}\n\nconst nomClient = [client.prenom, client.nom].filter(Boolean).join(\" \") || client.nom || \"Client\";\nconst subject = `Votre devis NeoTravel - ${trajet.depart || \"Départ\"} → ${trajet.destination || \"Destination\"}`;\n\nconst html = `\n<p>Bonjour ${escapeHtml(nomClient)},</p>\n\n<p>Suite à votre demande, vous trouverez ci-dessous la synthèse de votre devis NeoTravel.</p>\n\n<h3>Synthèse de votre trajet</h3>\n<ul>\n  <li><strong>Trajet :</strong> ${escapeHtml(trajet.depart || \"\")} → ${escapeHtml(trajet.destination || \"\")}</li>\n  <li><strong>Date de départ :</strong> ${escapeHtml(trajet.date_depart || \"Non renseignée\")}</li>\n  <li><strong>Nombre de passagers :</strong> ${escapeHtml(trajet.nb_passagers || \"Non renseigné\")}</li>\n  <li><strong>Montant TTC :</strong> ${escapeHtml(devis.total_ttc || \"Non renseigné\")} €</li>\n</ul>\n\n<p>\n  <a href=\"${escapeHtml(pdf.drive_view_url)}\">Consulter mon devis</a>\n</p>\n\n<p>Pour toute question ou modification, vous pouvez répondre directement à cet email.</p>\n\n<p>Cordialement,<br>L’équipe NeoTravel</p>\n`;\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Email client préparé.\",\n      context,\n      email: {\n        type: \"CLIENT_QUOTE\",\n        to: client.email,\n        subject,\n        html\n      },\n      result: {\n        entity: \"email\",\n        type: \"CLIENT_QUOTE\"\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        832,
+        192
+      ],
+      "id": "12308a76-1dc0-4806-9f61-2ba62a20f05d",
+      "name": "Generate_HTML_Client_Quote"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appHiQbjhDTbd6Bzy",
+          "mode": "list",
+          "cachedResultName": "NeoTravel",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbld9UwclutpI5oSV",
+          "mode": "list",
+          "cachedResultName": "Devis",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy/tbld9UwclutpI5oSV"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Statut devis": "en attente retour client",
+            "id": "={{ $('Generate_HTML_Client_Quote').item.json.context.devis.airtable_record_id }}",
+            "Date d'envoi du devis": "={{ new Date().toISOString() }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Devis ID",
+              "displayName": "Devis ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Lead_Id",
+              "displayName": "Lead_Id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Quote_Id",
+              "displayName": "Quote_Id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Formule utilisée",
+              "displayName": "Formule utilisée",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Prix HT",
+              "displayName": "Prix HT",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Marge (%)",
+              "displayName": "Marge (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Montant marge",
+              "displayName": "Montant marge",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Remise (%)",
+              "displayName": "Remise (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Montant remise",
+              "displayName": "Montant remise",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "TVA (%)",
+              "displayName": "TVA (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sous-total HT",
+              "displayName": "Sous-total HT",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Montant TVA",
+              "displayName": "Montant TVA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Prix TTC",
+              "displayName": "Prix TTC",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "PDF",
+              "displayName": "PDF",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date génération",
+              "displayName": "Date génération",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Statut devis",
+              "displayName": "Statut devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "En attente de validation commerciale",
+                  "value": "En attente de validation commerciale"
+                },
+                {
+                  "name": "Devis validé",
+                  "value": "Devis validé"
+                },
+                {
+                  "name": "Modification demandée",
+                  "value": "Modification demandée"
+                },
+                {
+                  "name": "en attente retour client",
+                  "value": "en attente retour client"
+                },
+                {
+                  "name": "Relance 1",
+                  "value": "Relance 1"
+                },
+                {
+                  "name": "Relance 2",
+                  "value": "Relance 2"
+                },
+                {
+                  "name": "Accepté par le client",
+                  "value": "Accepté par le client"
+                },
+                {
+                  "name": "Refusé par le client",
+                  "value": "Refusé par le client"
+                },
+                {
+                  "name": "Expiré",
+                  "value": "Expiré"
+                },
+                {
+                  "name": "Annulé",
+                  "value": "Annulé"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Commentaires de modifications de devis",
+              "displayName": "Commentaires de modifications de devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date d'envoi du devis",
+              "displayName": "Date d'envoi du devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Date relance 1",
+              "displayName": "Date relance 1",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date relance 2",
+              "displayName": "Date relance 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Lien vers Demandes",
+              "displayName": "Lien vers Demandes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "WF011_traite",
+              "displayName": "WF011_traite",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Demandes",
+              "displayName": "Demandes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Demandes 2",
+              "displayName": "Demandes 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Demandes 3",
+              "displayName": "Demandes 3",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1248,
+        192
+      ],
+      "id": "302b133c-1e5a-457c-9935-bc279e9dac2c",
+      "name": "Update_Devis_Status",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "6fZImtRVOpEcU1nE",
+          "name": "Airtable Personal Access Token Jimmy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "jimmyribeiro69@gmail.com",
+        "subject": "={{$json.email.subject}}",
+        "message": "={{$json.email.html}}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        192
+      ],
+      "id": "fd2125c9-1a6a-48fb-b8de-17f3efa61628",
+      "name": "Send_Client_Quote_Email",
+      "webhookId": "a3ef2a09-dc6a-4713-8fb6-0f9ef2c353e9",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "3s03BlEAN3NuYf8m",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/9666afa5-cdd2-4355-a1ce-306a245a2140",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"session_id\": \"={{ $json.context.session_id }}\",\n  \"success\": true,\n  \"status\": \"COMMERCIAL_ESCALATION\",\n  \"message\": \"Votre demande nécessite une étude complémentaire par notre équipe commerciale en raison de sa complexité. Un conseiller NeoTravel reviendra vers vous dans les meilleurs délais afin de finaliser votre demande.\",\n  \"context\": \"={{ $json.context }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1456,
+        -16
+      ],
+      "id": "263042b4-f12f-4b7b-9381-dc40e14b457c",
+      "name": "HTTP Request COMMERCIAL_ESCALATION"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/9666afa5-cdd2-4355-a1ce-306a245a2140",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"success\": true,\n  \"status\": \"WAITING_COMMERCIAL\",\n  \"message\": \"Votre demande a bien été prise en charge. Elle est actuellement en cours de vérification par notre équipe commerciale. Vous recevrez automatiquement votre devis par e-mail dès qu'il aura été validé. Aucune action n'est requise de votre part pour le moment.\",\n  \"context\": {{$json.context}}\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1456,
+        -224
+      ],
+      "id": "cc12a834-07fd-490f-969f-c44705ca1569",
+      "name": "HTTP Request WAITING_COMMERCIAL"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate_HTML_Commercial_Validation": {
+      "main": [
+        [
+          {
+            "node": "Send_Commercial_Validation_Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate_HTML_Commercial_Escalation": {
+      "main": [
+        [
+          {
+            "node": "Send_Commercial_Escalation_Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send_Commercial_Validation_Email": {
+      "main": [
+        [
+          {
+            "node": "Retour_Tool_Commercial_Validation_Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send_Commercial_Escalation_Email": {
+      "main": [
+        [
+          {
+            "node": "Retour_Tool_Commercial_Escalation_Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Generate_HTML_Commercial_Validation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate_HTML_Commercial_Escalation",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Generate_HTML_Client_Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate_HTML_Client_Quote": {
+      "main": [
+        [
+          {
+            "node": "Send_Client_Quote_Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send_Client_Quote_Email": {
+      "main": [
+        [
+          {
+            "node": "Update_Devis_Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update_Devis_Status": {
+      "main": [
+        [
+          {
+            "node": "Retour_Tool_Envoie_Client_Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retour_Tool_Commercial_Validation_Email": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request WAITING_COMMERCIAL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retour_Tool_Commercial_Escalation_Email": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request COMMERCIAL_ESCALATION",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "6bd6c1cb-11cd-41cd-8168-31739c1a8758",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "792146814beec0d92fea6db4c331074840e1a8375a2fa880d46b9cafae578ac4"
+  },
+  "nodeGroups": [],
+  "id": "S6I0mpF7XcLyXWRr",
+  "tags": []
+}

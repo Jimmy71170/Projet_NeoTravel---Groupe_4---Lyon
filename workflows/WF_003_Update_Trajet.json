@@ -1,0 +1,844 @@
+{
+  "name": "WF_003_Update_Trajet",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "5c1f6044-4fa8-40b8-ba33-7ac8240c7565",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -496,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.openrouteservice.org/geocode/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{$json.lookup.depart}}"
+            },
+            {
+              "name": "boundary.country",
+              "value": "FR"
+            },
+            {
+              "name": "size",
+              "value": "1"
+            },
+            {
+              "name": "lang",
+              "value": "FR"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImI1NTk5YjA3MGI4NDRmOTA5NWU3MzExZDI1NTg0MDI2IiwiaCI6Im11cm11cjY0In0="
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        0,
+        48
+      ],
+      "id": "a8b158ce-d093-4d74-b3ed-e22d3e7c0334",
+      "name": "HTTP Request - Geocode_depart",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EDjGsIfLhAjRPGVG",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "https://api.openrouteservice.org/geocode/search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "text",
+              "value": "={{$json.lookup.destination}}"
+            },
+            {
+              "name": "boundary.country",
+              "value": "FR"
+            },
+            {
+              "name": "size",
+              "value": "1"
+            },
+            {
+              "name": "lang",
+              "value": "FR"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImI1NTk5YjA3MGI4NDRmOTA5NWU3MzExZDI1NTg0MDI2IiwiaCI6Im11cm11cjY0In0="
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        0,
+        336
+      ],
+      "id": "961866de-8c47-4a03-8e21-a5ae13c247f4",
+      "name": "HTTP Request - Geocode_destination",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "EDjGsIfLhAjRPGVG",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "numberInputs": 3,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        448,
+        176
+      ],
+      "id": "01bed407-627e-400c-ab27-0dc19fd6e5bc",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// Calculate_Distance\n// Tag geocode depart\n// Version : MVP 1.0\n// =======================================\n\nconst geocodeDepart = $input.first()?.json || {};\nconst normalized = $(\"Normalize_Input_WF003\").first()?.json || {};\n\nreturn [\n  {\n    json: {\n      ...normalized,\n      geocode_depart: geocodeDepart\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        48
+      ],
+      "id": "578baa40-be16-4263-9ebb-fae00302fed0",
+      "name": "Tag geocode depart"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// Calculate_Distance\n// Tag geocode destination\n// Version : MVP 1.0\n// =======================================\n\nconst geocodeDestination = $input.first()?.json || {};\nconst normalized = $(\"Normalize_Input_WF003\").first()?.json || {};\n\nreturn [\n  {\n    json: {\n      ...normalized,\n      geocode_destination: geocodeDestination\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        336
+      ],
+      "id": "e2c650d7-86a5-46ca-bb86-3dd3853b1bf7",
+      "name": "Tag geocode destination"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// Calculate_Distance\n// Normalize_Input_WF003\n// Version : MVP 1.1\n// Entrée attendue : { context: {...} }\n// =======================================\n\nconst input = $input.first()?.json || {};\nconst now = new Date().toISOString();\n\nfunction clean(value) {\n  if (value === undefined || value === null) return null;\n  const str = String(value).trim();\n  return str.length > 0 ? str : null;\n}\n\nconst context = input.context || {};\nconst trajet = context.trajet || {};\n\nconst depart =\n  clean(trajet.adresse_depart) ||\n  clean(trajet.depart) ||\n  clean(trajet.ville_depart);\n\nconst destination =\n  clean(trajet.adresse_arrivee) ||\n  clean(trajet.destination) ||\n  clean(trajet.ville_arrivee);\n\nconst updatedContext = {\n  ...context,\n  last_update_at: now\n};\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Entrée Calculate_Distance normalisée.\",\n      context: updatedContext,\n      lookup: {\n        depart,\n        destination\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -288,
+        192
+      ],
+      "id": "83487bd0-34b5-4eeb-8247-079319d55fb2",
+      "name": "Normalize_Input_WF003"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// Calculate_Distance\n// Prepare_Route_Request\n// Version : MVP 1.1\n// =======================================\n\nconst items = $input.all().map(item => item.json);\nconst now = new Date().toISOString();\n\nconst base = items.find(i => i.context) || {};\nconst departItem = items.find(i => i.geocode_depart);\nconst destinationItem = items.find(i => i.geocode_destination);\n\nconst context = {\n  ...(base.context || {}),\n  last_update_at: now\n};\n\nconst departFeature = departItem?.geocode_depart?.features?.[0] || null;\nconst destinationFeature = destinationItem?.geocode_destination?.features?.[0] || null;\n\nconst departCoords = departFeature?.geometry?.coordinates || null;\nconst destinationCoords = destinationFeature?.geometry?.coordinates || null;\n\nif (!departCoords || !destinationCoords) {\n  return [\n    {\n      json: {\n        success: false,\n        message: \"Impossible de géocoder le départ ou la destination.\",\n        error: \"GEOCODING_FAILED\",\n        context: {\n          ...context,\n          last_tool: \"Calculate_Distance\",\n          last_error_at: now\n        }\n      }\n    }\n  ];\n}\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Coordonnées prêtes pour le calcul de distance.\",\n      context,\n      geocoding: {\n        depart: {\n          label: departFeature.properties?.label || null,\n          coordinates: departCoords\n        },\n        destination: {\n          label: destinationFeature.properties?.label || null,\n          coordinates: destinationCoords\n        }\n      },\n      ors_body: {\n        coordinates: [\n          departCoords,\n          destinationCoords\n        ]\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        192
+      ],
+      "id": "3ec78d48-fd15-4b9b-987c-185b2793a48a",
+      "name": "Prepare_Route_Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openrouteservice.org/v2/directions/driving-car",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6ImI1NTk5YjA3MGI4NDRmOTA5NWU3MzExZDI1NTg0MDI2IiwiaCI6Im11cm11cjY0In0="
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{$json.ors_body}}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        880,
+        192
+      ],
+      "id": "c4119b13-8f85-41fd-9613-a0b3cf7e1a57",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// WF_005_Calculate_Distance\n// Retour du Tool\n// Version : 3.0\n// Contrat de sortie standard NeoTravel\n// =======================================\n\nconst now = new Date().toISOString();\n\nconst routeOutput = $(\"HTTP Request\").first()?.json || {};\nconst prepared = $(\"Prepare_Route_Request\").first()?.json || {};\n\nconst context = prepared.context || {};\nconst geocoding = prepared.geocoding || {};\n\nconst route = routeOutput.routes?.[0] || null;\nconst summary = route?.summary || {};\n\nconst distanceMeters = Number(summary.distance || 0);\nconst durationSeconds = Number(summary.duration || 0);\n\nconst distanceKm = distanceMeters > 0\n  ? Math.round((distanceMeters / 1000) * 10) / 10\n  : null;\n\nconst dureeHeures = durationSeconds > 0\n  ? Math.round((durationSeconds / 3600) * 100) / 100\n  : null;\n\n// =======================================\n// Erreur\n// =======================================\n\nif (!distanceKm || !dureeHeures) {\n\n  const errorContext = {\n    ...context,\n    last_tool: \"WF_005_Calculate_Distance\",\n    last_error_at: now\n  };\n\n  return [\n    {\n      json: {\n\n        success: false,\n\n        status: \"ERROR\",\n\n        tool: \"WF_005_Calculate_Distance\",\n\n        version: \"3.0\",\n\n        timestamp: now,\n\n        context: errorContext,\n\n        message: \"Impossible de calculer automatiquement la distance entre les deux adresses.\",\n\n        next_action: \"error\",\n\n        next_workflow: \"\",\n\n        next_payload: {},\n\n        error: {\n          code: \"ROUTE_NOT_FOUND\",\n          details: \"Aucun itinéraire valide n'a été retourné par OpenRouteService.\"\n        }\n\n      }\n    }\n  ];\n}\n\n// =======================================\n// Mise à jour du contexte\n// =======================================\n\nconst updatedContext = {\n\n  ...context,\n\n  distance: {\n\n    calculated: true,\n\n    distance_km: distanceKm,\n\n    duree_heures: dureeHeures,\n\n    duration_seconds: durationSeconds,\n\n    distance_meters: distanceMeters,\n\n    provider: \"openrouteservice\",\n\n    geocoding,\n\n    calculated_at: now\n\n  },\n\n  trajet: {\n\n    ...(context.trajet || {}),\n\n    distance_km: distanceKm,\n\n    duree_heures: dureeHeures\n\n  },\n\n  last_tool: \"WF_005_Calculate_Distance\",\n\n  last_update_at: now\n\n};\n\n// =======================================\n// Retour Tool\n// =======================================\n\nreturn [\n  {\n    json: {\n\n      success: true,\n\n      status: \"DISTANCE_CALCULATED\",\n\n      tool: \"WF_005_Calculate_Distance\",\n\n      version: \"3.0\",\n\n      timestamp: now,\n\n      context: updatedContext,\n\n      message: \"La distance et la durée du trajet ont été calculées avec succès.\",\n\n      next_action: \"call_tool\",\n\n      next_workflow: \"WF_006_Calculate_Quote\",\n\n      next_payload: {\n        context: updatedContext\n      },\n\n      error: null\n\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        192
+      ],
+      "id": "ed90a78e-39ce-4eef-9054-c34cfafbfa58",
+      "name": "Retour Tool Lookup_Distance"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appHiQbjhDTbd6Bzy",
+          "mode": "list",
+          "cachedResultName": "NeoTravel",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblj19fF45B22UtwK",
+          "mode": "list",
+          "cachedResultName": "Demandes",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy/tblj19fF45B22UtwK"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Distance (km)": "={{ Number(($json.routes[0].summary.distance / 1000).toFixed(1)) }}",
+            "id": "={{ $('Normalize_Input_WF003').item.json.context.airtable.demande_record_id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Demande ID",
+              "displayName": "Demande ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Nom du client",
+              "displayName": "Nom du client",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Entreprise",
+              "displayName": "Entreprise",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Téléphone",
+              "displayName": "Téléphone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Départ",
+              "displayName": "Départ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Destination",
+              "displayName": "Destination",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Distance (km)",
+              "displayName": "Distance (km)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Durée du trajet (en heure)",
+              "displayName": "Durée du trajet (en heure)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date de la demande",
+              "displayName": "Date de la demande",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date de la Demande (jj/mm/aaaa)",
+              "displayName": "Date de la Demande (jj/mm/aaaa)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date de départ",
+              "displayName": "Date de départ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date de retour",
+              "displayName": "Date de retour",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Type de trajet",
+              "displayName": "Type de trajet",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Nombre de passagers",
+              "displayName": "Nombre de passagers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Commentaire client",
+              "displayName": "Commentaire client",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Type client",
+              "displayName": "Type client",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Urgence",
+              "displayName": "Urgence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Prioritaire",
+                  "value": "Prioritaire"
+                },
+                {
+                  "name": "Urgent",
+                  "value": "Urgent"
+                },
+                {
+                  "name": "Normal",
+                  "value": "Normal"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Résumé IA",
+              "displayName": "Résumé IA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Statue",
+              "displayName": "Statue",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Nouvelle demande",
+                  "value": "Nouvelle demande"
+                },
+                {
+                  "name": "En attente validation commerciale",
+                  "value": "En attente validation commerciale"
+                },
+                {
+                  "name": "En attente retour client",
+                  "value": "En attente retour client"
+                },
+                {
+                  "name": "En qualification",
+                  "value": "En qualification"
+                },
+                {
+                  "name": "Terminée",
+                  "value": "Terminée"
+                },
+                {
+                  "name": "Clôturée",
+                  "value": "Clôturée"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Commercial assigné",
+              "displayName": "Commercial assigné",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date création",
+              "displayName": "Date création",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Dernière modification",
+              "displayName": "Dernière modification",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Lien vers Devis",
+              "displayName": "Lien vers Devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Devis",
+              "displayName": "Devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Devis 2",
+              "displayName": "Devis 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Devis 3",
+              "displayName": "Devis 3",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Prix TTC (de Lien vers Devis)",
+              "displayName": "Prix TTC (de Lien vers Devis)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Statut Devis",
+              "displayName": "Statut Devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Date génération Devis",
+              "displayName": "Date génération Devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Copia d'envoie Devis",
+              "displayName": "Copia d'envoie Devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Taux de conversion",
+              "displayName": "Taux de conversion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1072,
+        192
+      ],
+      "id": "d04713ad-0928-4043-883e-470b59ed6308",
+      "name": "Update record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "6fZImtRVOpEcU1nE",
+          "name": "Airtable Personal Access Token Jimmy"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Normalize_Input_WF003",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Geocode_depart": {
+      "main": [
+        [
+          {
+            "node": "Tag geocode depart",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request - Geocode_destination": {
+      "main": [
+        [
+          {
+            "node": "Tag geocode destination",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Prepare_Route_Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag geocode depart": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tag geocode destination": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Normalize_Input_WF003": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request - Geocode_depart",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "HTTP Request - Geocode_destination",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Prepare_Route_Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Update record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update record": {
+      "main": [
+        [
+          {
+            "node": "Retour Tool Lookup_Distance",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retour Tool Lookup_Distance": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "fba45eb0-d55b-42d7-99fb-2e6caddab4e4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "792146814beec0d92fea6db4c331074840e1a8375a2fa880d46b9cafae578ac4"
+  },
+  "nodeGroups": [],
+  "id": "PioJClQvKRmfiyCK",
+  "tags": []
+}

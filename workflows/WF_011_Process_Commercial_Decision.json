@@ -1,0 +1,613 @@
+{
+  "name": "WF_011_Process_Commercial_Decision",
+  "nodes": [
+    {
+      "parameters": {
+        "base": {
+          "__rl": true,
+          "value": "appHiQbjhDTbd6Bzy",
+          "mode": "id"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblj19fF45B22UtwK",
+          "mode": "list",
+          "cachedResultName": "Demandes",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy/tblj19fF45B22UtwK"
+        },
+        "id": "={{ $json.fields[\"Lien vers Demandes\"] }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        192,
+        -272
+      ],
+      "id": "edaee7b5-aa33-429e-b67e-e372887de038",
+      "name": "Get Demandes",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "6fZImtRVOpEcU1nE",
+          "name": "Airtable Personal Access Token Jimmy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -256,
+        -208
+      ],
+      "id": "e83921c4-c41d-4f75-ae85-8fd3e57b0042",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appHiQbjhDTbd6Bzy",
+          "mode": "list",
+          "cachedResultName": "NeoTravel",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbld9UwclutpI5oSV",
+          "mode": "list",
+          "cachedResultName": "Devis",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy/tbld9UwclutpI5oSV"
+        },
+        "filterByFormula": "AND(   {WF011_traite} != TRUE(),   OR(     {Statut devis} = \"Devis validé\",     {Statut devis} = \"Modification demandée\"   ) )",
+        "options": {},
+        "sort": {
+          "property": []
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        -32,
+        -208
+      ],
+      "id": "8cc12085-c78b-471d-9b47-f6bc09b67b40",
+      "name": "Search records",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "6fZImtRVOpEcU1nE",
+          "name": "Airtable Personal Access Token Jimmy"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        416,
+        -208
+      ],
+      "id": "8ab7f607-1fc3-4fc1-a610-de137660d05c",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "S6I0mpF7XcLyXWRr",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/S6I0mpF7XcLyXWRr",
+          "cachedResultName": "WF_010_Send_Email"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        1088,
+        -112
+      ],
+      "id": "3aed5466-8c21-473c-a551-2f7e0ade8a87",
+      "name": "Call 'WF_010_Send_Email'"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\n\nconst input = $input.first()?.json || {};\n\nlet devisRecord = {};\nlet demandeRecord = {};\n\ntry {\n  devisRecord = $(\"Search records\").first().json || {};\n} catch (e) {\n  devisRecord = input;\n}\n\ntry {\n  demandeRecord = $(\"Get Demandes\").first().json || {};\n} catch (e) {\n  demandeRecord = {};\n}\n\nconst devisFields = devisRecord.fields || {};\nconst demandeFields = demandeRecord.fields || {};\n\nfunction get(fields, names, fallback = null) {\n  for (const name of names) {\n    if (fields[name] !== undefined && fields[name] !== null && fields[name] !== \"\") {\n      return fields[name];\n    }\n  }\n  return fallback;\n}\n\nfunction str(value) {\n  if (value === undefined || value === null || value === \"\") return null;\n  return String(value);\n}\n\nfunction num(value) {\n  if (value === undefined || value === null || value === \"\") return null;\n  const n = Number(String(value).replace(\",\", \".\"));\n  return Number.isFinite(n) ? n : null;\n}\n\nconst statutDevis = str(get(devisFields, [\"Statut devis\"]));\nconst commentaireModification = str(get(devisFields, [\"Commentaires de modifications de devis\"], \"\")) || \"\";\n\nconst pdfValue = get(devisFields, [\"PDF\"]);\nconst pdfUrl = Array.isArray(pdfValue)\n  ? pdfValue[0]?.url || null\n  : str(pdfValue);\n\nconst context = {\n  lead_id: str(get(demandeFields, [\"Lead_Id\"])),\n  demande_id: get(demandeFields, [\"Demande ID\"]),\n\n  airtable: {\n    demande_record_id: demandeRecord.id || null,\n    devis_record_id: devisRecord.id || null\n  },\n\n  client: {\n    nom: str(get(demandeFields, [\"Nom du client\", \"Nom\"])),\n    prenom: str(get(demandeFields, [\"Prénom\", \"Prenom\"])),\n    entreprise: str(get(demandeFields, [\"Entreprise\", \"Société\"])),\n    email: str(get(demandeFields, [\"Email\", \"Mail\"])),\n    telephone: str(get(demandeFields, [\"Téléphone\", \"Telephone\"])),\n    type_client: str(get(demandeFields, [\"Type client\"]))\n  },\n\n  trajet: {\n    depart: str(get(demandeFields, [\"Départ\", \"Depart\"])),\n    destination: str(get(demandeFields, [\"Destination\"])),\n    date_depart: str(get(demandeFields, [\"Date de départ\", \"Date départ\"])),\n    date_retour: str(get(demandeFields, [\"Date de retour\"])),\n    type_trajet: str(get(demandeFields, [\"Type de trajet\"])),\n    nb_passagers: num(get(demandeFields, [\"Nombre de passagers\"])),\n    commentaire: str(get(demandeFields, [\"Commentaire client\"]))\n  },\n\n  distance: {\n    distance_km: num(get(demandeFields, [\"Distance (km)\"])),\n    duration_hours: num(get(demandeFields, [\"Durée du trajet (en heure)\"]))\n  },\n\n  devis: {\n    airtable_record_id: devisRecord.id || null,\n    quote_id: str(get(devisFields, [\"Quote_Id\", \"Devis ID\"])),\n    formule_utilisee: str(get(devisFields, [\"Formule utilisée\"])),\n    prix_base_ht: num(get(devisFields, [\"Prix HT\"])),\n    total_ht: num(get(devisFields, [\"Sous-total HT\", \"Prix HT\"])),\n    total_ttc: num(get(devisFields, [\"Prix TTC\"])),\n    tva_pourcentage: num(get(devisFields, [\"TVA (%)\"])),\n    montant_tva: num(get(devisFields, [\"Montant TVA\"])),\n    marge_pourcentage: num(get(devisFields, [\"Marge (%)\"])),\n    montant_marge: num(get(devisFields, [\"Montant marge\"])),\n    currency: \"EUR\",\n    status: statutDevis\n  },\n\n  pdf: {\n    generated: !!pdfUrl,\n    ready: !!pdfUrl,\n    drive_view_url: pdfUrl,\n    airtable_pdf_url: pdfUrl\n  },\n\n  commercial_decision: {\n    statut_devis: statutDevis,\n    commentaire_modification: commentaireModification,\n    decided_at: now\n  },\n\n  last_update_at: now\n};\n\nlet decision = \"NO_ACTION\";\nlet email_type = null;\nlet next_workflow = null;\n\nif (statutDevis === \"Devis validé\") {\n  decision = \"SEND_CLIENT_QUOTE\";\n  email_type = \"CLIENT_QUOTE\";\n  next_workflow = \"WF_010_Send_Email\";\n}\n\nif (statutDevis === \"Modification demandée\") {\n  decision = \"RECALCULATE_OR_ESCALATE\";\n  email_type = \"COMMERCIAL_ESCALATION\";\n  next_workflow = \"WF_010_Send_Email\";\n}\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Décision commerciale détectée.\",\n      context,\n      email_type,\n      decision,\n      next_workflow,\n      result: {\n        entity: \"commercial_decision\",\n        decision,\n        email_type\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        -208
+      ],
+      "id": "366e4b39-4780-408c-9fab-1069450dab82",
+      "name": "Build_Context_And_Decision"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appHiQbjhDTbd6Bzy",
+          "mode": "list",
+          "cachedResultName": "NeoTravel",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbld9UwclutpI5oSV",
+          "mode": "list",
+          "cachedResultName": "Devis",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy/tbld9UwclutpI5oSV"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "WF011_traite": true,
+            "id": "={{ $('Build_Context_And_Decision').item.json.context.devis.airtable_record_id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Devis ID",
+              "displayName": "Devis ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Lead_Id",
+              "displayName": "Lead_Id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Quote_Id",
+              "displayName": "Quote_Id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Formule utilisée",
+              "displayName": "Formule utilisée",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Prix HT",
+              "displayName": "Prix HT",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Marge (%)",
+              "displayName": "Marge (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Montant marge",
+              "displayName": "Montant marge",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Remise (%)",
+              "displayName": "Remise (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Montant remise",
+              "displayName": "Montant remise",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "TVA (%)",
+              "displayName": "TVA (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sous-total HT",
+              "displayName": "Sous-total HT",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Montant TVA",
+              "displayName": "Montant TVA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Prix TTC",
+              "displayName": "Prix TTC",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "PDF",
+              "displayName": "PDF",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date génération",
+              "displayName": "Date génération",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Statut devis",
+              "displayName": "Statut devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "En attente de validation commerciale",
+                  "value": "En attente de validation commerciale"
+                },
+                {
+                  "name": "Devis validé",
+                  "value": "Devis validé"
+                },
+                {
+                  "name": "Modification demandée",
+                  "value": "Modification demandée"
+                },
+                {
+                  "name": "en attente retour client",
+                  "value": "en attente retour client"
+                },
+                {
+                  "name": "Relance 1",
+                  "value": "Relance 1"
+                },
+                {
+                  "name": "Relance 2",
+                  "value": "Relance 2"
+                },
+                {
+                  "name": "Accepté par le client",
+                  "value": "Accepté par le client"
+                },
+                {
+                  "name": "Refusé par le client",
+                  "value": "Refusé par le client"
+                },
+                {
+                  "name": "Expiré",
+                  "value": "Expiré"
+                },
+                {
+                  "name": "Annulé",
+                  "value": "Annulé"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Commentaires de modifications de devis",
+              "displayName": "Commentaires de modifications de devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date d'envoi du devis",
+              "displayName": "Date d'envoi du devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date relance 1",
+              "displayName": "Date relance 1",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date relance 2",
+              "displayName": "Date relance 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Lien vers Demandes",
+              "displayName": "Lien vers Demandes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "WF011_traite",
+              "displayName": "WF011_traite",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Demandes",
+              "displayName": "Demandes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Demandes 2",
+              "displayName": "Demandes 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Demandes 3",
+              "displayName": "Demandes 3",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1088,
+        -304
+      ],
+      "id": "63885f7d-00ef-48da-a5f8-efaee8f4d549",
+      "name": "Mark_WF011_Treated",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "6fZImtRVOpEcU1nE",
+          "name": "Airtable Personal Access Token Jimmy"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Get Demandes": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Search records",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search records": {
+      "main": [
+        [
+          {
+            "node": "Get Demandes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Build_Context_And_Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call 'WF_010_Send_Email'": {
+      "main": [
+        []
+      ]
+    },
+    "Build_Context_And_Decision": {
+      "main": [
+        [
+          {
+            "node": "Call 'WF_010_Send_Email'",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Mark_WF011_Treated",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "0b180fbc-6f91-4f72-901b-44f3b7ce8ba6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "792146814beec0d92fea6db4c331074840e1a8375a2fa880d46b9cafae578ac4"
+  },
+  "nodeGroups": [],
+  "id": "0Wp8Z3cl94Z8af42",
+  "tags": []
+}

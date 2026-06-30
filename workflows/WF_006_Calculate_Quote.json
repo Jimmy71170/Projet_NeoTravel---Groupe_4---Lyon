@@ -1,0 +1,704 @@
+{
+  "name": "WF_006_Calculate_Quote",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -240,
+        16
+      ],
+      "id": "c695137f-dbca-490d-bdb7-4b108f6478b0",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appHiQbjhDTbd6Bzy",
+          "mode": "list",
+          "cachedResultName": "NeoTravel",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblafVx08IAsBoFUC",
+          "mode": "list",
+          "cachedResultName": "Grille Tarifaire",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy/tblafVx08IAsBoFUC"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        -80
+      ],
+      "id": "7f537283-ab09-4f28-b0ed-ba5d34a7930c",
+      "name": "Grille Tarifaire",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "LECMyiH6toHP6H9n",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "search",
+        "base": {
+          "__rl": true,
+          "value": "appHiQbjhDTbd6Bzy",
+          "mode": "list",
+          "cachedResultName": "NeoTravel",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblEZeU3mfo4mr7bc",
+          "mode": "list",
+          "cachedResultName": "Référentiel Tarification",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy/tblEZeU3mfo4mr7bc"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        112
+      ],
+      "id": "7ab870a6-fa66-4a7b-b1c6-cc4c1e6c6d15",
+      "name": "Référentiel",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "LECMyiH6toHP6H9n",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// Calculate_Quote\n// Préparer les règles métier\n// Version : MVP 1.1\n// =======================================\n\nconst now = new Date().toISOString();\n\nconst validation = $(\"Validation contexte avant calcul\").first()?.json || {};\nconst context = validation.context || {};\n\nconst referentielItems = $(\"Référentiel\").all();\nconst grilleItems = $(\"Grille Tarifaire\").all();\n\nconst errors = [];\n\nfunction normalizeText(value) {\n  return String(value || \"\")\n    .toLowerCase()\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .replace(/[–—]/g, \"-\")\n    .replace(/≤/g, \"<=\")\n    .replace(/≥/g, \">=\")\n    .trim();\n}\n\nfunction toNumber(value) {\n  const number = Number(value);\n  return Number.isFinite(number) ? number : null;\n}\n\nfunction getFields(item) {\n  return item?.json?.fields || item?.json || {};\n}\n\nconst rules = {\n  tva: null,\n  marge: null,\n\n  saisonnalite: {\n    basse: null,\n    moyenne: null,\n    haute: null,\n    tres_haute: null\n  },\n\n  urgence: {\n    prioritaire_14j: null,\n    urgent_15_30j: null,\n    normal_31_90j: null,\n    plus_90j: null\n  },\n\n  capacite: {\n    jusqua_19: null,\n    de_20_a_53: null,\n    de_54_a_63: null,\n    de_64_a_67: null,\n    de_68_a_85: null\n  },\n\n  grille_tarifaire: [],\n\n  formule_longue_distance: {\n    seuil_km: 180,\n    coefficient_distance: 2,\n    prix_km_ht: 2.5\n  }\n};\n\nfor (const item of referentielItems) {\n  const fields = getFields(item);\n\n  const parametre = normalizeText(fields[\"Paramètre\"]);\n  const categorie = normalizeText(fields[\"Catégorie\"]);\n  const valeur = toNumber(fields[\"Valeur\"]);\n\n  if (valeur === null) continue;\n\n  if (parametre === \"tva\" || categorie === \"fiscalite\") {\n    rules.tva = valeur;\n    continue;\n  }\n\n  if (parametre === \"marge\" || categorie === \"commercial\") {\n    rules.marge = valeur;\n    continue;\n  }\n\n  if (categorie === \"saisonnalite\") {\n    if (parametre.includes(\"basse\")) rules.saisonnalite.basse = valeur;\n    else if (parametre.includes(\"moyen\")) rules.saisonnalite.moyenne = valeur;\n    else if (parametre.includes(\"tres haute\")) rules.saisonnalite.tres_haute = valeur;\n    else if (parametre.includes(\"haute\")) rules.saisonnalite.haute = valeur;\n  }\n\n  if (categorie === \"urgence\") {\n    if (parametre.includes(\"prioritaire\") || parametre.includes(\"14\")) {\n      rules.urgence.prioritaire_14j = valeur;\n    } else if (parametre.includes(\"urgent\") || parametre.includes(\"15\") || parametre.includes(\"30\")) {\n      rules.urgence.urgent_15_30j = valeur;\n    } else if (parametre.includes(\"normal\") || parametre.includes(\"31\")) {\n      rules.urgence.normal_31_90j = valeur;\n    } else if (parametre.includes(\">90\") || parametre.includes(\"90\")) {\n      rules.urgence.plus_90j = valeur;\n    }\n  }\n\n  if (categorie === \"capacite\") {\n    if (parametre.includes(\"19\")) rules.capacite.jusqua_19 = valeur;\n    else if (parametre.includes(\"20\") || parametre.includes(\"53\")) rules.capacite.de_20_a_53 = valeur;\n    else if (parametre.includes(\"54\") || parametre.includes(\"63\")) rules.capacite.de_54_a_63 = valeur;\n    else if (parametre.includes(\"64\") || parametre.includes(\"67\")) rules.capacite.de_64_a_67 = valeur;\n    else if (parametre.includes(\"68\") || parametre.includes(\"85\")) rules.capacite.de_68_a_85 = valeur;\n  }\n}\n\nfor (const item of grilleItems) {\n  const fields = getFields(item);\n\n  const distanceMaxKm = toNumber(fields[\"Distance max (km)\"]);\n  const prixForfaitHt = toNumber(fields[\"Prix forfait HT\"]);\n\n  if (distanceMaxKm === null || prixForfaitHt === null) continue;\n\n  rules.grille_tarifaire.push({\n    palier: fields[\"Palier\"] || String(distanceMaxKm),\n    distance_max_km: distanceMaxKm,\n    prix_forfait_ht: prixForfaitHt,\n    type_formule: fields[\"Type formule\"] || \"Transfert simple\"\n  });\n}\n\nrules.grille_tarifaire.sort((a, b) => a.distance_max_km - b.distance_max_km);\n\nif (rules.tva === null) errors.push({ code: \"MISSING_TVA\", field: \"rules.tva\" });\nif (rules.marge === null) errors.push({ code: \"MISSING_MARGE\", field: \"rules.marge\" });\nif (rules.grille_tarifaire.length === 0) errors.push({ code: \"MISSING_GRID\", field: \"rules.grille_tarifaire\" });\n\nfor (const [field, value] of Object.entries({\n  \"rules.saisonnalite.basse\": rules.saisonnalite.basse,\n  \"rules.saisonnalite.moyenne\": rules.saisonnalite.moyenne,\n  \"rules.saisonnalite.haute\": rules.saisonnalite.haute,\n  \"rules.saisonnalite.tres_haute\": rules.saisonnalite.tres_haute,\n  \"rules.urgence.prioritaire_14j\": rules.urgence.prioritaire_14j,\n  \"rules.urgence.urgent_15_30j\": rules.urgence.urgent_15_30j,\n  \"rules.urgence.normal_31_90j\": rules.urgence.normal_31_90j,\n  \"rules.urgence.plus_90j\": rules.urgence.plus_90j,\n  \"rules.capacite.jusqua_19\": rules.capacite.jusqua_19,\n  \"rules.capacite.de_20_a_53\": rules.capacite.de_20_a_53,\n  \"rules.capacite.de_54_a_63\": rules.capacite.de_54_a_63,\n  \"rules.capacite.de_64_a_67\": rules.capacite.de_64_a_67,\n  \"rules.capacite.de_68_a_85\": rules.capacite.de_68_a_85\n})) {\n  if (value === null) errors.push({ code: \"MISSING_RULE\", field });\n}\n\nif (errors.length > 0) {\n  return [\n    {\n      json: {\n        success: false,\n        message: \"Règles tarifaires incomplètes.\",\n        error: \"INVALID_PRICING_RULES\",\n        errors,\n        context: {\n          ...context,\n          last_tool: \"Calculate_Quote\",\n          last_error_at: now\n        }\n      }\n    }\n  ];\n}\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Règles tarifaires préparées.\",\n      context: {\n        ...context,\n        pricing_rules: rules,\n        last_update_at: now\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        16
+      ],
+      "id": "6e87001d-3339-4c07-9e87-ca8265d5dc7a",
+      "name": "Préparer les règles métier"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        672,
+        16
+      ],
+      "id": "91f1907f-f2d5-442f-b577-35286638c73a",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// Calculate_Quote\n// Calcul du devis\n// Version : MVP 1.0\n// Calcul déterministe — aucun LLM\n// =======================================\n\nconst now = new Date().toISOString();\n\nconst input = $input.first()?.json || {};\nconst context = input.context || {};\nconst rules = context.pricing_rules || {};\n\nconst errors = [];\n\nfunction round2(value) {\n  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;\n}\n\nfunction normalizeText(value) {\n  return String(value || \"\")\n    .toLowerCase()\n    .normalize(\"NFD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .replace(/[–—]/g, \"-\")\n    .replace(/\\s*-\\s*/g, \"-\")\n    .trim();\n}\n\nfunction daysBetween(dateStart, dateEnd) {\n  const start = new Date(dateStart);\n  const end = new Date(dateEnd);\n\n  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;\n\n  return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));\n}\n\nconst distanceKm = Number(context.distance?.distance_km);\nconst nbPassagers = Number(context.trajet?.nb_passagers);\nconst typeTrajet = context.trajet?.type_trajet || \"aller-simple\";\nconst typeTrajetNormalized = normalizeText(typeTrajet);\nconst dateDepart = context.trajet?.date_depart;\n\nconst dateDemande =\n  context.trajet?.date_demande ||\n  context.metadata?.created_at ||\n  context.last_update_at ||\n  now;\n\nif (!Number.isFinite(distanceKm) || distanceKm <= 0) errors.push({ code: \"INVALID_DISTANCE\", field: \"distance.distance_km\" });\nif (!Number.isFinite(nbPassagers) || nbPassagers <= 0) errors.push({ code: \"INVALID_PASSENGERS\", field: \"trajet.nb_passagers\" });\nif (!dateDepart) errors.push({ code: \"MISSING_DATE_DEPART\", field: \"trajet.date_depart\" });\n\nif (errors.length > 0) {\n  return [\n    {\n      json: {\n        success: false,\n        message: \"Impossible de calculer le devis.\",\n        error: \"INVALID_CONTEXT_FOR_QUOTE\",\n        errors,\n        context\n      }\n    }\n  ];\n}\n\nlet prixBaseTransfertSimpleHt = 0;\nlet formuleUtilisee = null;\nlet selectedPalier = null;\n\nconst seuilLongueDistance = Number(rules.formule_longue_distance?.seuil_km || 180);\nconst coefficientDistance = Number(rules.formule_longue_distance?.coefficient_distance || 2);\nconst prixKmHt = Number(rules.formule_longue_distance?.prix_km_ht || 2.5);\n\nif (distanceKm <= seuilLongueDistance) {\n  selectedPalier = [...(rules.grille_tarifaire || [])]\n    .sort((a, b) => a.distance_max_km - b.distance_max_km)\n    .find((palier) => distanceKm <= Number(palier.distance_max_km));\n\n  if (!selectedPalier) {\n    return [\n      {\n        json: {\n          success: false,\n          message: \"Aucun palier tarifaire ne correspond à la distance.\",\n          error: \"NO_MATCHING_PRICING_TIER\",\n          context\n        }\n      }\n    ];\n  }\n\n  prixBaseTransfertSimpleHt = Number(selectedPalier.prix_forfait_ht);\n  formuleUtilisee = `Forfait palier ${selectedPalier.distance_max_km} km`;\n} else {\n  prixBaseTransfertSimpleHt = round2(distanceKm * coefficientDistance * prixKmHt);\n  formuleUtilisee = `Longue distance : (${distanceKm} × ${coefficientDistance}) × ${prixKmHt}`;\n}\n\nlet multiplicateurTrajet = 1;\n\nif (\n  typeTrajetNormalized.includes(\"aller-retour\") ||\n  typeTrajetNormalized.includes(\"allerretour\")\n) {\n  multiplicateurTrajet = 2;\n}\n\nconst prixBaseHt = round2(prixBaseTransfertSimpleHt * multiplicateurTrajet);\n\nconst month = new Date(dateDepart).getMonth() + 1;\n\nlet saisonName = \"Moyenne\";\nlet coefSaison = rules.saisonnalite?.moyenne ?? 0;\n\nif ([11, 1, 2, 8].includes(month)) {\n  saisonName = \"Basse\";\n  coefSaison = rules.saisonnalite.basse;\n} else if ([12, 10, 9].includes(month)) {\n  saisonName = \"Moyenne\";\n  coefSaison = rules.saisonnalite.moyenne;\n} else if ([3, 4, 7].includes(month)) {\n  saisonName = \"Haute\";\n  coefSaison = rules.saisonnalite.haute;\n} else if ([5, 6].includes(month)) {\n  saisonName = \"Très haute\";\n  coefSaison = rules.saisonnalite.tres_haute;\n}\n\nconst delaiJours = daysBetween(dateDemande, dateDepart);\n\nlet urgenceName = \"Non déterminée\";\nlet coefUrgence = 0;\n\nif (delaiJours !== null) {\n  if (delaiJours <= 14) {\n    urgenceName = \"Prioritaire\";\n    coefUrgence = rules.urgence.prioritaire_14j;\n  } else if (delaiJours <= 30) {\n    urgenceName = \"Urgent\";\n    coefUrgence = rules.urgence.urgent_15_30j;\n  } else if (delaiJours <= 90) {\n    urgenceName = \"Normal\";\n    coefUrgence = rules.urgence.normal_31_90j;\n  } else {\n    urgenceName = \"Plus de 90 jours\";\n    coefUrgence = rules.urgence.plus_90j;\n  }\n}\n\nlet capaciteName = null;\nlet coefCapacite = 0;\n\nif (nbPassagers <= 19) {\n  capaciteName = \"≤19 passagers\";\n  coefCapacite = rules.capacite.jusqua_19;\n} else if (nbPassagers <= 53) {\n  capaciteName = \"20–53 passagers\";\n  coefCapacite = rules.capacite.de_20_a_53;\n} else if (nbPassagers <= 63) {\n  capaciteName = \"54–63 passagers\";\n  coefCapacite = rules.capacite.de_54_a_63;\n} else if (nbPassagers <= 67) {\n  capaciteName = \"64–67 passagers\";\n  coefCapacite = rules.capacite.de_64_a_67;\n} else if (nbPassagers <= 85) {\n  capaciteName = \"68–85 passagers\";\n  coefCapacite = rules.capacite.de_68_a_85;\n} else {\n  return [\n    {\n      json: {\n        success: false,\n        message: \"Demande hors périmètre de calcul automatique.\",\n        error: \"CAPACITY_OUT_OF_RANGE\",\n        context\n      }\n    }\n  ];\n}\n\nconst margePourcentage = Number(rules.marge);\nconst tvaPourcentage = Number(rules.tva);\n\nconst totalCoef = Number(coefSaison) + Number(coefUrgence) + Number(coefCapacite);\n\nconst montantApresCoefficientsHt = round2(prixBaseHt * (1 + totalCoef / 100));\nconst montantMarge = round2(montantApresCoefficientsHt * (margePourcentage / 100));\nconst totalHt = round2(montantApresCoefficientsHt + montantMarge);\nconst montantTva = round2(totalHt * (tvaPourcentage / 100));\nconst totalTtc = round2(totalHt + montantTva);\n\nconst quoteId = `DEV-${context.demande_id || \"NA\"}-${Date.now()}`;\n\nconst calculationDetails = {\n  resume: `Formule: ${formuleUtilisee} | Base HT: ${prixBaseHt} € | Saison: ${saisonName} ${coefSaison}% | Urgence: ${urgenceName} ${coefUrgence}% | Capacité: ${capaciteName} ${coefCapacite}% | Total HT: ${totalHt} € | TVA: ${montantTva} € | TTC: ${totalTtc} €`,\n  lignes: [\n    { ordre: 1, libelle: \"Formule utilisée\", formule: formuleUtilisee, montant_ht: prixBaseTransfertSimpleHt },\n    { ordre: 2, libelle: \"Multiplicateur trajet\", formule: `${typeTrajet} × ${multiplicateurTrajet}`, montant_ht: prixBaseHt },\n    { ordre: 3, libelle: \"Coefficient saison\", formule: `${saisonName} = ${coefSaison}%`, montant_ht: round2(prixBaseHt * (coefSaison / 100)) },\n    { ordre: 4, libelle: \"Coefficient urgence\", formule: `${urgenceName} = ${coefUrgence}%`, montant_ht: round2(prixBaseHt * (coefUrgence / 100)) },\n    { ordre: 5, libelle: \"Coefficient capacité\", formule: `${capaciteName} = ${coefCapacite}%`, montant_ht: round2(prixBaseHt * (coefCapacite / 100)) },\n    { ordre: 6, libelle: \"Marge commerciale\", formule: `${montantApresCoefficientsHt} × ${margePourcentage}%`, montant_ht: montantMarge },\n    { ordre: 7, libelle: \"TVA\", formule: `${totalHt} × ${tvaPourcentage}%`, montant_ht: montantTva },\n    { ordre: 8, libelle: \"Prix TTC\", formule: `${totalHt} + ${montantTva}`, montant_ttc: totalTtc }\n  ]\n};\n\nconst { pricing_rules, ...contextWithoutPricingRules } = context;\n\nconst updatedContext = {\n  ...contextWithoutPricingRules,\n\n  devis: {\n    ...(context.devis || {}),\n    quote_id: quoteId,\n    formule_utilisee: formuleUtilisee,\n    prix_base_ht: prixBaseHt,\n    prix_base_transfert_simple_ht: prixBaseTransfertSimpleHt,\n    multiplicateur_trajet: multiplicateurTrajet,\n    coef_saison: coefSaison,\n    coef_urgence: coefUrgence,\n    coef_capacite: coefCapacite,\n    total_coef: totalCoef,\n    montant_apres_coefficients_ht: montantApresCoefficientsHt,\n    marge_pourcentage: margePourcentage,\n    montant_marge: montantMarge,\n    tva_pourcentage: tvaPourcentage,\n    montant_tva: montantTva,\n    total_ht: totalHt,\n    total_ttc: totalTtc,\n    currency: \"EUR\",\n    calculated: true,\n    calculated_at: now,\n    calculation_details: calculationDetails\n  },\n\n  pricing: {\n    formula_used: formuleUtilisee,\n    selected_palier: selectedPalier,\n    season: {\n      name: saisonName,\n      coef: coefSaison\n    },\n    urgency: {\n      name: urgenceName,\n      coef: coefUrgence,\n      days_before_departure: delaiJours\n    },\n    capacity: {\n      name: capaciteName,\n      coef: coefCapacite\n    },\n    margin: {\n      percent: margePourcentage,\n      amount: montantMarge\n    },\n    vat: {\n      percent: tvaPourcentage,\n      amount: montantTva\n    }\n  },\n\n  last_tool: \"Calculate_Quote\",\n  last_update_at: now\n};\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Devis calculé.\",\n      context: updatedContext,\n      result: {\n        entity: \"quote\",\n        quote_id: quoteId,\n        total_ht: totalHt,\n        total_ttc: totalTtc,\n        currency: \"EUR\"\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        16
+      ],
+      "id": "a21f8105-893e-44b5-814e-7781304ecea9",
+      "name": "Calcul du devis"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appHiQbjhDTbd6Bzy",
+          "mode": "list",
+          "cachedResultName": "NeoTravel",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbld9UwclutpI5oSV",
+          "mode": "list",
+          "cachedResultName": "Devis",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy/tbld9UwclutpI5oSV"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Prix HT": "={{ $json.fields[\"Prix HT\"] }}",
+            "Marge (%)": "={{ $json.fields['Marge (%)'] }}",
+            "TVA (%)": "={{ $json.fields['TVA (%)'] }}",
+            "Formule utilisée": "={{ $json.fields['Formule utilisée'] }}",
+            "Montant marge": "={{ $json.fields['Montant marge'] }}",
+            "Montant TVA": "={{ $json.fields['Montant TVA'] }}",
+            "Prix TTC": "={{ $json.fields['Prix TTC'] }}",
+            "Quote_Id": "={{ $json.fields['Quote_Id'] }}",
+            "Sous-total HT": "={{ $json.fields['Sous-total HT'] }}",
+            "Statut devis": "En attente de validation commerciale"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Devis ID",
+              "displayName": "Devis ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Lead_Id",
+              "displayName": "Lead_Id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Quote_Id",
+              "displayName": "Quote_Id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Formule utilisée",
+              "displayName": "Formule utilisée",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Prix HT",
+              "displayName": "Prix HT",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Marge (%)",
+              "displayName": "Marge (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Montant marge",
+              "displayName": "Montant marge",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Remise (%)",
+              "displayName": "Remise (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Montant remise",
+              "displayName": "Montant remise",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "TVA (%)",
+              "displayName": "TVA (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Sous-total HT",
+              "displayName": "Sous-total HT",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Montant TVA",
+              "displayName": "Montant TVA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Prix TTC",
+              "displayName": "Prix TTC",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "PDF",
+              "displayName": "PDF",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date génération",
+              "displayName": "Date génération",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Statut devis",
+              "displayName": "Statut devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "En attente de validation commerciale",
+                  "value": "En attente de validation commerciale"
+                },
+                {
+                  "name": "Devis validé",
+                  "value": "Devis validé"
+                },
+                {
+                  "name": "Modification demandée",
+                  "value": "Modification demandée"
+                },
+                {
+                  "name": "en attente retour client",
+                  "value": "en attente retour client"
+                },
+                {
+                  "name": "Relance 1",
+                  "value": "Relance 1"
+                },
+                {
+                  "name": "Relance 2",
+                  "value": "Relance 2"
+                },
+                {
+                  "name": "Accepté par le client",
+                  "value": "Accepté par le client"
+                },
+                {
+                  "name": "Refusé par le client",
+                  "value": "Refusé par le client"
+                },
+                {
+                  "name": "Expiré",
+                  "value": "Expiré"
+                },
+                {
+                  "name": "Annulé",
+                  "value": "Annulé"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Commentaires de modifications de devis",
+              "displayName": "Commentaires de modifications de devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date d'envoi du devis",
+              "displayName": "Date d'envoi du devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date relance 1",
+              "displayName": "Date relance 1",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date relance 2",
+              "displayName": "Date relance 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Lien vers Demandes",
+              "displayName": "Lien vers Demandes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "WF011_traite",
+              "displayName": "WF011_traite",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Demandes",
+              "displayName": "Demandes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Demandes 2",
+              "displayName": "Demandes 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Demandes 3",
+              "displayName": "Demandes 3",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1552,
+        16
+      ],
+      "id": "2cd45f23-5d4d-4ff6-914b-f657744bd41c",
+      "name": "Create a record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "LECMyiH6toHP6H9n",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// Calculate_Quote\n// Normalize_Input_WF006\n// Version : MVP 1.1\n// Entrée attendue : { context: {...} }\n// =======================================\n\nconst input = $input.first()?.json || {};\nconst now = new Date().toISOString();\n\nconst context = input.context || {};\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Entrée Calculate_Quote normalisée.\",\n      context: {\n        ...context,\n        last_update_at: now\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        16
+      ],
+      "id": "310c767e-c302-45db-948e-7af9ded33162",
+      "name": "Normalize_Input_WF006"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// WF_006_Calculate_Quote\n// Fusion Airtable Devis + Contexte\n// Version : 3.0\n// Contrat de sortie standard NeoTravel\n// =======================================\n\nconst now = new Date().toISOString();\n\nconst record = $input.first()?.json || {};\nconst fields = record.fields || {};\n\nconst quoteId = fields[\"Quote_Id\"] || null;\nconst devisId = fields[\"Devis ID\"] || null;\n\n// =======================================\n// Reconstruction du contexte\n// =======================================\n\nconst context = {\n\n  airtable: {\n    devis_record_id: record.id || null,\n    devis_id: devisId,\n    quote_id: quoteId\n  },\n\n  devis: {\n\n    airtable_record_id: record.id || null,\n\n    devis_id: devisId,\n\n    quote_id: quoteId,\n\n    formule_utilisee: fields[\"Formule utilisée\"] || null,\n\n    prix_base_ht: fields[\"Prix HT\"] || null,\n\n    total_ht: fields[\"Sous-total HT\"] || fields[\"Prix HT\"] || null,\n\n    montant_tva: fields[\"Montant TVA\"] || null,\n\n    total_ttc: fields[\"Prix TTC\"] || null,\n\n    tva_pourcentage: fields[\"TVA (%)\"] || null,\n\n    marge_pourcentage: fields[\"Marge (%)\"] || null,\n\n    montant_marge: fields[\"Montant marge\"] || null,\n\n    status: fields[\"Statut devis\"] || null,\n\n    currency: \"EUR\"\n\n  },\n\n  pdf: {\n    generated: false\n  },\n\n  steps: {\n    quote_calculated: true,\n    pdf_generated: false\n  },\n\n  last_tool: \"WF_006_Calculate_Quote\",\n\n  last_update_at: now\n\n};\n\n// =======================================\n// Retour Tool\n// =======================================\n\nreturn [\n  {\n    json: {\n\n      success: true,\n\n      status: \"QUOTE_CALCULATED\",\n\n      tool: \"WF_006_Calculate_Quote\",\n\n      version: \"3.0\",\n\n      timestamp: now,\n\n      context,\n\n      message: \"Le devis a été calculé avec succès.\",\n\n      next_action: \"call_tool\",\n\n      next_workflow: \"WF_007_Check_Completude_Avant_PDF\",\n\n      next_payload: {\n        context\n      },\n\n      error: null\n\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        -80
+      ],
+      "id": "2ead3732-255a-4d1a-bb80-57c1f7aa9c9e",
+      "name": "Fusion Airtable Devis + Contexte"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// Calculate_Quote\n// Préparer Airtable Devis\n// Version : MVP 1.1\n// =======================================\n\nconst input = $input.first()?.json || {};\nconst context = input.context || {};\nconst devis = context.devis || {};\n\nconst fields = {\n  \"Quote_Id\": devis.quote_id,\n  \"Lead_Id\": context.airtable?.demande_record_id || null,\n  \"Formule utilisée\": devis.formule_utilisee,\n  \"Prix HT\": devis.montant_apres_coefficients_ht,\n  \"Marge (%)\": devis.marge_pourcentage,\n  \"Montant marge\": devis.montant_marge,\n  \"TVA (%)\": devis.tva_pourcentage,\n  \"Montant TVA\": devis.montant_tva,\n  \"Sous-total HT\": devis.total_ht,\n  \"Prix TTC\": devis.total_ttc,\n  \"Statut devis\": \"En attente de validation commerciale\"\n};\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Payload Airtable Devis préparé.\",\n      context,\n      fields,\n      result: input.result || null\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        16
+      ],
+      "id": "f1e41251-0ccc-4a97-872d-bec4f4a8e2f4",
+      "name": "Préparer Airtable Devis"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// Calculate_Quote\n// Validation contexte avant calcul\n// Version : MVP 1.0\n// =======================================\n\nconst input = $input.first()?.json || {};\nconst now = new Date().toISOString();\n\nconst context = input.context || {};\nconst errors = [];\n\nfunction isEmpty(value) {\n  return value === undefined || value === null || value === \"\";\n}\n\nfunction isValidNumber(value) {\n  return !isEmpty(value) && Number.isFinite(Number(value));\n}\n\nif (!context.airtable?.demande_record_id) {\n  errors.push({\n    code: \"MISSING_DEMANDE_RECORD_ID\",\n    field: \"context.airtable.demande_record_id\",\n    message: \"Le record Airtable de la demande est obligatoire.\"\n  });\n}\n\nif (!context.distance?.distance_km || !isValidNumber(context.distance.distance_km)) {\n  errors.push({\n    code: \"MISSING_DISTANCE\",\n    field: \"context.distance.distance_km\",\n    message: \"La distance est obligatoire pour calculer le devis.\"\n  });\n}\n\nif (!context.trajet?.nb_passagers || !isValidNumber(context.trajet.nb_passagers)) {\n  errors.push({\n    code: \"MISSING_PASSENGERS\",\n    field: \"context.trajet.nb_passagers\",\n    message: \"Le nombre de passagers est obligatoire.\"\n  });\n}\n\nif (!context.trajet?.date_depart) {\n  errors.push({\n    code: \"MISSING_DATE_DEPART\",\n    field: \"context.trajet.date_depart\",\n    message: \"La date de départ est obligatoire.\"\n  });\n}\n\nif (!context.trajet?.type_trajet) {\n  errors.push({\n    code: \"MISSING_TYPE_TRAJET\",\n    field: \"context.trajet.type_trajet\",\n    message: \"Le type de trajet est obligatoire.\"\n  });\n}\n\nconst nbPassagers = Number(context.trajet?.nb_passagers);\n\nif (Number.isFinite(nbPassagers) && nbPassagers > 85) {\n  return [\n    {\n      json: {\n        success: false,\n        message: \"La demande dépasse le périmètre de calcul automatique.\",\n        error: \"CAPACITY_REQUIRES_COMMERCIAL_REVIEW\",\n        context: {\n          ...context,\n          commercial: {\n            ...(context.commercial || {}),\n            validation_required: true,\n            reason: \"CAPACITY_OVER_85\"\n          },\n          last_tool: \"Calculate_Quote\",\n          last_error_at: now\n        },\n        result: {\n          entity: \"quote\",\n          manual_review: true,\n          reason: \"CAPACITY_OVER_85\"\n        }\n      }\n    }\n  ];\n}\n\nif (errors.length > 0) {\n  return [\n    {\n      json: {\n        success: false,\n        message: \"Données insuffisantes pour calculer le devis.\",\n        error: \"QUOTE_VALIDATION_FAILED\",\n        errors,\n        context: {\n          ...context,\n          last_tool: \"Calculate_Quote\",\n          last_error_at: now\n        }\n      }\n    }\n  ];\n}\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Contexte validé pour calcul du devis.\",\n      context: {\n        ...context,\n        last_update_at: now\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        16
+      ],
+      "id": "fbdac1b4-2afb-4b16-98e0-2dab6a5a0e2a",
+      "name": "Validation contexte avant calcul"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// Calculate_Quote\n// Retour erreur Airtable\n// Version : MVP 1.0\n// =======================================\n\nconst now = new Date().toISOString();\n\nlet prepared = {};\ntry {\n  prepared = $(\"Préparer Airtable Devis\").first()?.json || {};\n} catch (error) {\n  prepared = {};\n}\n\nconst context = prepared.context || {};\nconst inputError = $input.first()?.json || {};\n\nreturn [\n  {\n    json: {\n      success: false,\n      message: \"Devis calculé mais impossible à enregistrer dans Airtable.\",\n      error: \"AIRTABLE_CREATE_QUOTE_FAILED\",\n      details: inputError.error?.message || inputError.message || null,\n      context: {\n        ...context,\n        last_tool: \"Calculate_Quote\",\n        last_error_at: now\n      },\n      result: {\n        entity: \"quote\",\n        saved_to_airtable: false\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1744,
+        112
+      ],
+      "id": "9282191d-507a-4adf-8c83-233423b0dc92",
+      "name": "Retour erreur Airtable Calculate_Quote"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Normalize_Input_WF006",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Grille Tarifaire": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Référentiel": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Préparer les règles métier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Préparer les règles métier": {
+      "main": [
+        [
+          {
+            "node": "Calcul du devis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcul du devis": {
+      "main": [
+        [
+          {
+            "node": "Préparer Airtable Devis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a record": {
+      "main": [
+        [
+          {
+            "node": "Fusion Airtable Devis + Contexte",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retour erreur Airtable Calculate_Quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize_Input_WF006": {
+      "main": [
+        [
+          {
+            "node": "Validation contexte avant calcul",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fusion Airtable Devis + Contexte": {
+      "main": [
+        []
+      ]
+    },
+    "Préparer Airtable Devis": {
+      "main": [
+        [
+          {
+            "node": "Create a record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation contexte avant calcul": {
+      "main": [
+        [
+          {
+            "node": "Grille Tarifaire",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Référentiel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "3f4e36d0-e0ef-4255-9142-b677b98a3b27",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "792146814beec0d92fea6db4c331074840e1a8375a2fa880d46b9cafae578ac4"
+  },
+  "nodeGroups": [],
+  "id": "0CuG9XNtTV4ejWKQ",
+  "tags": []
+}

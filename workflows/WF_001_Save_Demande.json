@@ -1,0 +1,572 @@
+{
+  "name": "WF_001_Save_Demande",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "id": "c055762a-8fe7-4141-a639-df2372f30060",
+      "typeVersion": 1.1,
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        512,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// WF_001_Update_Client\n// Normalize_Input_WF001\n// Version : 3.0\n// Compatible avec l'AI Agent NeoTravel\n// =======================================\n\nconst raw = $input.first()?.json || {};\nconst now = new Date().toISOString();\n\nfunction clean(value) {\n  if (value === undefined || value === null) return null;\n  const str = String(value).trim();\n  return str.length ? str : null;\n}\n\nfunction parseIfJson(value) {\n  if (typeof value !== \"string\") return value;\n\n  try {\n    return JSON.parse(value);\n  } catch {\n    return value;\n  }\n}\n\n// ---------------------------------------\n// Lecture de l'entrée\n// ---------------------------------------\n\nlet input = raw;\n\nif (typeof raw.query === \"string\") {\n  input = parseIfJson(raw.query);\n}\n\nif (typeof raw.input === \"string\") {\n  input = parseIfJson(raw.input);\n}\n\nif (raw.input && typeof raw.input === \"object\") {\n  input = raw.input;\n}\n\nif (typeof input === \"string\") {\n  return [{\n    json: {\n      success: false,\n      message: \"Impossible de parser l'entrée.\",\n      context: {}\n    }\n  }];\n}\n\n// ---------------------------------------\n// Compatibilité ancien / nouveau format\n// ---------------------------------------\n\nconst rootClient = input.client || input.context || input;\nconst rawTrajet = input.trajet || {};\nconst rawVehicule = input.vehicule || {};\n\n// ---------------------------------------\n// Client\n// ---------------------------------------\n\nconst client = {\n\n  type_client:\n    clean(rootClient.type_client) ||\n    clean(rootClient.client_type) ||\n    clean(rootClient.customer_type),\n\n  nom:\n    clean(rootClient.nom),\n\n  prenom:\n    clean(rootClient.prenom),\n\n  email:\n    clean(rootClient.email)?.toLowerCase() || null,\n\n  telephone:\n    clean(rootClient.telephone),\n\n  entreprise:\n    clean(rootClient.entreprise) ||\n    clean(rootClient.organisation) ||\n    clean(rootClient.organization) ||\n    clean(rootClient.societe)\n\n};\n\n// ---------------------------------------\n// Trajet\n// ---------------------------------------\n\nconst trajet = {\n\n  depart:\n    clean(rawTrajet.depart) ||\n    clean(rawTrajet.ville_depart) ||\n    clean(rawTrajet.depart_ville),\n\n  destination:\n    clean(rawTrajet.destination) ||\n    clean(rawTrajet.ville_destination) ||\n    clean(rawTrajet.destination_ville),\n\n  depart_adresse:\n    clean(rawTrajet.depart_adresse),\n\n  destination_adresse:\n    clean(rawTrajet.destination_adresse),\n\n  date_depart:\n    clean(rawTrajet.date_depart),\n\n  date_retour:\n    clean(rawTrajet.date_retour),\n\n  nb_passagers:\n    Number(\n      rawTrajet.nb_passagers ??\n      rawTrajet.nombre_passagers\n    ) || null,\n\n  type_trajet:\n    clean(rawTrajet.type_trajet),\n\n  type_vehicule:\n    clean(rawTrajet.type_vehicule) ||\n    clean(rawTrajet.type_vehicule_souhaite) ||\n    clean(rawVehicule.type),\n\n  bagages_par_personne:\n    clean(input.bagages) ||\n    clean(rawTrajet.bagages) ||\n    clean(rawTrajet.bagages_par_personne),\n\n  options:\n    Array.isArray(input.options)\n      ? input.options\n      : Array.isArray(rawTrajet.options)\n      ? rawTrajet.options\n      : [],\n\n  commentaire:\n    clean(input.commentaire) ||\n    clean(rawTrajet.commentaire),\n\n  urgence:\n    clean(input.urgence) ||\n    clean(rawTrajet.urgence),\n\n  date_demande:\n    clean(rawTrajet.date_demande) ||\n    now.slice(0,10)\n\n};\n\n// ---------------------------------------\n// Déductions\n// ---------------------------------------\n\nif (!trajet.type_trajet) {\n\n  trajet.type_trajet = trajet.date_retour\n    ? \"Aller-retour\"\n    : \"Aller simple\";\n\n}\n\n// ---------------------------------------\n// Contexte\n// ---------------------------------------\n\nconst context = {\n\n  client,\n\n  trajet,\n\n  raw_user_message:\n    typeof raw.query === \"string\"\n      ? raw.query\n      : JSON.stringify(input),\n\n  last_tool: \"Normalize_Input_WF001\",\n\n  last_update_at: now\n\n};\n\n// ---------------------------------------\n// Retour\n// ---------------------------------------\n\nreturn [\n{\njson:{\n\nsuccess:true,\n\nmessage:\"Entrée Save_Demande normalisée.\",\n\ncontext\n\n}\n}\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        256
+      ],
+      "id": "1d506daf-03cd-41d8-8802-c2fa4363620a",
+      "name": "Normalize_Input_WF001"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "appHiQbjhDTbd6Bzy",
+          "mode": "list",
+          "cachedResultName": "NeoTravel",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tblj19fF45B22UtwK",
+          "mode": "list",
+          "cachedResultName": "Demandes",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy/tblj19fF45B22UtwK"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Nom du client": "={{ $json.context.client.prenom }} {{ $json.context.client.nom }}",
+            "Entreprise": "={{ $json.context.client.entreprise }}",
+            "Email": "={{ $json.context.client.email }}",
+            "Téléphone": "={{ $json.context.client.telephone }}",
+            "Date de la demande": "={{ $json.context.trajet.date_demande }}",
+            "Statue": "Nouvelle demande",
+            "Nombre de passagers": "={{ $json.context.trajet.nb_passagers }}",
+            "Départ": "={{ $json.context.trajet.depart }}",
+            "Destination": "={{ $json.context.trajet.destination }}",
+            "Date de départ": "={{ $json.context.trajet.date_depart }}",
+            "Date de retour": "={{ $json.context.trajet.date_retour }}",
+            "Type de trajet": "={{ $json.context.trajet.type_trajet }}",
+            "Commentaire client": "={{ $json.context.trajet.commentaire }}",
+            "Type client": "={{ $json.context.client.type_client }}"
+          },
+          "matchingColumns": [
+            "Lead_Id"
+          ],
+          "schema": [
+            {
+              "id": "Demande ID",
+              "displayName": "Demande ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Nom du client",
+              "displayName": "Nom du client",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Entreprise",
+              "displayName": "Entreprise",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Téléphone",
+              "displayName": "Téléphone",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Départ",
+              "displayName": "Départ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Destination",
+              "displayName": "Destination",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Distance (km)",
+              "displayName": "Distance (km)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Durée du trajet (en heure)",
+              "displayName": "Durée du trajet (en heure)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date de la demande",
+              "displayName": "Date de la demande",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Date de la Demande (jj/mm/aaaa)",
+              "displayName": "Date de la Demande (jj/mm/aaaa)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date de départ",
+              "displayName": "Date de départ",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Date de retour",
+              "displayName": "Date de retour",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Type de trajet",
+              "displayName": "Type de trajet",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Nombre de passagers",
+              "displayName": "Nombre de passagers",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Commentaire client",
+              "displayName": "Commentaire client",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Type client",
+              "displayName": "Type client",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Urgence",
+              "displayName": "Urgence",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Prioritaire",
+                  "value": "Prioritaire"
+                },
+                {
+                  "name": "Urgent",
+                  "value": "Urgent"
+                },
+                {
+                  "name": "Normal",
+                  "value": "Normal"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Résumé IA",
+              "displayName": "Résumé IA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Statue",
+              "displayName": "Statue",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Nouvelle demande",
+                  "value": "Nouvelle demande"
+                },
+                {
+                  "name": "En attente validation commerciale",
+                  "value": "En attente validation commerciale"
+                },
+                {
+                  "name": "En attente retour client",
+                  "value": "En attente retour client"
+                },
+                {
+                  "name": "En qualification",
+                  "value": "En qualification"
+                },
+                {
+                  "name": "Terminée",
+                  "value": "Terminée"
+                },
+                {
+                  "name": "Clôturée",
+                  "value": "Clôturée"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Commercial assigné",
+              "displayName": "Commercial assigné",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date création",
+              "displayName": "Date création",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Dernière modification",
+              "displayName": "Dernière modification",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Lien vers Devis",
+              "displayName": "Lien vers Devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Devis",
+              "displayName": "Devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Devis 2",
+              "displayName": "Devis 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Devis 3",
+              "displayName": "Devis 3",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Prix TTC (de Lien vers Devis)",
+              "displayName": "Prix TTC (de Lien vers Devis)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Statut Devis",
+              "displayName": "Statut Devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Date génération Devis",
+              "displayName": "Date génération Devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Copia d'envoie Devis",
+              "displayName": "Copia d'envoie Devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Taux de conversion",
+              "displayName": "Taux de conversion",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        256
+      ],
+      "id": "6b8ceb35-16c9-44a7-a11c-2b97b1991888",
+      "name": "Create a record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "LECMyiH6toHP6H9n",
+          "name": "Airtable Personal Access Token account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// WF_001_Update_Client\n// Retour du Tool\n// Version : 3.0\n// Contrat de sortie standard NeoTravel\n// =======================================\n\nconst now = new Date().toISOString();\n\nconst airtable = $input.first()?.json || {};\nconst normalized = $(\"Normalize_Input_WF001\").first()?.json || {};\n\nconst context = normalized.context || {};\n\nconst demandeRecordId = airtable.id || null;\nconst demandeId = airtable.fields?.[\"Demande ID\"] || context.demande_id || null;\n\nconst updatedContext = {\n  ...context,\n\n  demande_id: demandeId,\n\n  airtable: {\n    ...(context.airtable || {}),\n    demande_record_id: demandeRecordId\n  },\n\n  client: {\n    ...(context.client || {}),\n    saved: true,\n    saved_at: now\n  },\n\n  trajet: {\n    ...(context.trajet || {}),\n    saved: true,\n    saved_at: now\n  },\n\n  last_tool: \"WF_001_Update_Client\",\n  last_update_at: now\n};\n\nreturn [\n  {\n    json: {\n\n      // =======================================\n      // Contrat standard\n      // =======================================\n\n      success: true,\n\n      status: \"CLIENT_UPDATED\",\n\n      tool: \"WF_001_Update_Client\",\n\n      version: \"3.0\",\n\n      timestamp: now,\n\n      context: updatedContext,\n\n      message: \"Les informations du client et de la demande ont été enregistrées.\",\n\n      next_action: \"call_tool\",\n\n      next_workflow: \"WF_003_Update_Trajet\",\n\n      next_payload: {\n        context: updatedContext\n      },\n\n      error: null\n\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        160
+      ],
+      "id": "4c5dc2f9-1993-4b5e-8175-54b756afcf5f",
+      "name": "Retour du Tool Save_Demande"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// Save_Demande\n// Retour erreur Airtable\n// Version : MVP 1.2\n// =======================================\n\nconst now = new Date().toISOString();\n\nlet normalized = {};\n\ntry {\n  normalized = $(\"Normalize_Input_WF001\").first()?.json || {};\n} catch (error) {\n  normalized = {};\n}\n\nconst context = normalized.context || {};\nconst inputError = $input.first()?.json || {};\n\nreturn [\n  {\n    json: {\n      success: false,\n      message: \"Impossible de créer la demande dans Airtable.\",\n      error: \"AIRTABLE_CREATE_FAILED\",\n      details: inputError.error?.message || inputError.message || null,\n      context: {\n        ...context,\n        last_tool: \"Save_Demande\",\n        last_error_at: now\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1184,
+        352
+      ],
+      "id": "732cf56d-6d65-453d-ba26-70c03c4ef881",
+      "name": "Retour erreur Airtable Save_Demande"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Normalize_Input_WF001",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize_Input_WF001": {
+      "main": [
+        [
+          {
+            "node": "Create a record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a record": {
+      "main": [
+        [
+          {
+            "node": "Retour du Tool Save_Demande",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Retour erreur Airtable Save_Demande",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retour du Tool Save_Demande": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "b6bdb18d-d0d4-4083-91b4-e6782b649c1e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "792146814beec0d92fea6db4c331074840e1a8375a2fa880d46b9cafae578ac4"
+  },
+  "nodeGroups": [],
+  "id": "s0btGpgxKSsEdQkD",
+  "tags": []
+}

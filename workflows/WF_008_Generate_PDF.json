@@ -1,0 +1,680 @@
+{
+  "name": "WF_008_Generate_PDF",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "29311c87-be00-4077-b6bd-7bf0d937e012",
+      "name": "When Executed by Another Workflow"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\n\nconst input = $input.first()?.json || {};\nconst context = input.context || {};\n\nconst client = context.client || {};\nconst trajet = context.trajet || {};\nconst distance = context.distance || {};\nconst devis = context.devis || {};\nconst pricing = context.pricing || {};\n\nfunction escapeHtml(value) {\n  return String(value ?? \"\")\n    .replaceAll(\"&\", \"&amp;\")\n    .replaceAll(\"<\", \"&lt;\")\n    .replaceAll(\">\", \"&gt;\")\n    .replaceAll('\"', \"&quot;\")\n    .replaceAll(\"'\", \"&#039;\");\n}\n\nfunction formatCurrency(value) {\n  const number = Number(value || 0);\n  return number.toLocaleString(\"fr-FR\", {\n    style: \"currency\",\n    currency: devis.currency || \"EUR\"\n  });\n}\n\nfunction formatDate(value) {\n  if (!value) return \"\";\n  const date = new Date(value);\n  if (Number.isNaN(date.getTime())) return String(value);\n\n  return date.toLocaleDateString(\"fr-FR\", {\n    year: \"numeric\",\n    month: \"long\",\n    day: \"numeric\"\n  });\n}\n\nconst quoteId =\n  devis.quote_id ||\n  `DEVIS-${context.airtable?.demande_record_id || Date.now()}`;\n\nconst fileName = `${quoteId}.pdf`;\n\nconst clientDisplayName = [client.prenom, client.nom]\n  .filter(Boolean)\n  .join(\" \")\n  .trim() || client.nom || \"Client\";\n\nconst tvaPercent =\n  devis.tva_pourcentage ??\n  pricing.vat?.percent ??\n  10;\n\nconst prixBaseHt =\n  devis.prix_base_ht ??\n  devis.base_ht ??\n  devis.total_ht ??\n  0;\n\nconst totalHt = devis.total_ht ?? 0;\nconst totalTtc = devis.total_ttc ?? 0;\nconst montantTva =\n  devis.montant_tva ??\n  Math.max(0, Number(totalTtc) - Number(totalHt));\n\nconst ajustements = Number(totalHt) - Number(prixBaseHt);\n\nconst html = `\n<!DOCTYPE html>\n<html lang=\"fr\">\n<head>\n  <meta charset=\"UTF-8\" />\n  <title>Devis ${escapeHtml(quoteId)}</title>\n  <style>\n    @page { size: A4 portrait; margin: 10mm; }\n\n    * {\n      box-sizing: border-box;\n    }\n\n    body {\n      font-family: Arial, Helvetica, sans-serif;\n      margin: 0;\n      color: #1f2937;\n      background: #ffffff;\n      font-size: 11px;\n      line-height: 1.3;\n    }\n\n    .header {\n      display: flex;\n      justify-content: space-between;\n      border-bottom: 3px solid #123C69;\n      padding-bottom: 12px;\n      margin-bottom: 16px;\n    }\n\n    .brand {\n      font-size: 24px;\n      font-weight: 700;\n      color: #123C69;\n    }\n\n    .brand span {\n      color: #4CAF50;\n    }\n\n    .subtitle {\n      margin-top: 4px;\n      color: #4b5563;\n    }\n\n    .quote-meta {\n      text-align: right;\n      color: #4b5563;\n    }\n\n    .quote-title {\n      font-size: 22px;\n      color: #123C69;\n      margin: 0 0 6px 0;\n      font-weight: 700;\n    }\n\n    .section {\n      margin-bottom: 14px;\n    }\n\n    .section-title {\n      background: #f0f7f4;\n      color: #123C69;\n      padding: 7px 10px;\n      font-size: 13px;\n      font-weight: 700;\n      border-left: 4px solid #4CAF50;\n      margin-bottom: 8px;\n    }\n\n    .grid {\n      display: grid;\n      grid-template-columns: 1fr 1fr;\n      gap: 10px;\n    }\n\n    .card {\n      border: 1px solid #e5e7eb;\n      border-radius: 6px;\n      padding: 9px;\n      background: #ffffff;\n    }\n\n    .row {\n      display: flex;\n      justify-content: space-between;\n      gap: 10px;\n      padding: 4px 0;\n      border-bottom: 1px solid #f3f4f6;\n    }\n\n    .row:last-child {\n      border-bottom: none;\n    }\n\n    .label {\n      color: #6b7280;\n      font-weight: 600;\n    }\n\n    .value {\n      color: #111827;\n      text-align: right;\n      font-weight: 500;\n    }\n\n    table {\n      width: 100%;\n      border-collapse: collapse;\n      margin-top: 6px;\n      font-size: 11px;\n    }\n\n    th {\n      background: #123C69;\n      color: #ffffff;\n      text-align: left;\n      padding: 7px 8px;\n      font-weight: 700;\n    }\n\n    td {\n      border-bottom: 1px solid #e5e7eb;\n      padding: 7px 8px;\n    }\n\n    td.amount {\n      text-align: right;\n      font-weight: 600;\n      white-space: nowrap;\n    }\n\n    .totals {\n      width: 45%;\n      margin-left: auto;\n      margin-top: 10px;\n      border: 1px solid #e5e7eb;\n      border-radius: 6px;\n      overflow: hidden;\n    }\n\n    .total-row {\n      display: flex;\n      justify-content: space-between;\n      padding: 7px 10px;\n      border-bottom: 1px solid #e5e7eb;\n    }\n\n    .total-final {\n      background: #123C69;\n      color: #ffffff;\n      font-size: 14px;\n      font-weight: 700;\n    }\n\n    .notice {\n      margin-top: 12px;\n      padding: 9px;\n      background: #f9fafb;\n      border-left: 4px solid #4CAF50;\n      color: #374151;\n      font-size: 10px;\n    }\n\n    .footer {\n      margin-top: 14px;\n      padding-top: 7px;\n      border-top: 1px solid #e5e7eb;\n      font-size: 9px;\n      color: #6b7280;\n      text-align: center;\n    }\n  </style>\n</head>\n\n<body>\n  <div class=\"header\">\n    <div>\n      <div class=\"brand\">Neo<span>Travel</span></div>\n      <div class=\"subtitle\">Organisation de transport de groupe</div>\n    </div>\n\n    <div class=\"quote-meta\">\n      <h1 class=\"quote-title\">Devis</h1>\n      <div><strong>N° :</strong> ${escapeHtml(quoteId)}</div>\n      <div><strong>Date :</strong> ${escapeHtml(formatDate(now))}</div>\n      <div><strong>Statut :</strong> ${escapeHtml(devis.status || \"Généré\")}</div>\n    </div>\n  </div>\n\n  <div class=\"section\">\n    <div class=\"section-title\">Client</div>\n    <div class=\"card\">\n      <div class=\"row\">\n        <div class=\"label\">Nom</div>\n        <div class=\"value\">${escapeHtml(clientDisplayName)}</div>\n      </div>\n      <div class=\"row\">\n        <div class=\"label\">Email</div>\n        <div class=\"value\">${escapeHtml(client.email || \"\")}</div>\n      </div>\n      <div class=\"row\">\n        <div class=\"label\">Téléphone</div>\n        <div class=\"value\">${escapeHtml(client.telephone || \"Non renseigné\")}</div>\n      </div>\n    </div>\n  </div>\n\n  <div class=\"section\">\n    <div class=\"section-title\">Trajet</div>\n    <div class=\"grid\">\n      <div class=\"card\">\n        <div class=\"row\">\n          <div class=\"label\">Départ</div>\n          <div class=\"value\">${escapeHtml(trajet.depart || \"\")}</div>\n        </div>\n        <div class=\"row\">\n          <div class=\"label\">Destination</div>\n          <div class=\"value\">${escapeHtml(trajet.destination || \"\")}</div>\n        </div>\n        <div class=\"row\">\n          <div class=\"label\">Date départ</div>\n          <div class=\"value\">${escapeHtml(formatDate(trajet.date_depart))}</div>\n        </div>\n      </div>\n\n      <div class=\"card\">\n        <div class=\"row\">\n          <div class=\"label\">Type</div>\n          <div class=\"value\">${escapeHtml(trajet.type_trajet || \"Transport groupe\")}</div>\n        </div>\n        <div class=\"row\">\n          <div class=\"label\">Passagers</div>\n          <div class=\"value\">${escapeHtml(trajet.nb_passagers || \"\")}</div>\n        </div>\n        <div class=\"row\">\n          <div class=\"label\">Distance</div>\n          <div class=\"value\">${escapeHtml(distance.distance_km || \"\")} km</div>\n        </div>\n      </div>\n    </div>\n  </div>\n\n  <div class=\"section\">\n    <div class=\"section-title\">Détail du devis</div>\n\n    <table>\n      <thead>\n        <tr>\n          <th>Description</th>\n          <th style=\"text-align:right;\">Montant HT</th>\n        </tr>\n      </thead>\n      <tbody>\n        <tr>\n          <td>${escapeHtml(devis.formule_utilisee || \"Base transport\")}</td>\n          <td class=\"amount\">${formatCurrency(prixBaseHt)}</td>\n        </tr>\n        <tr>\n          <td>Ajustements tarifaires, saisonnalité, capacité, options et marge commerciale</td>\n          <td class=\"amount\">${formatCurrency(ajustements)}</td>\n        </tr>\n      </tbody>\n    </table>\n\n    <div class=\"totals\">\n      <div class=\"total-row\">\n        <div>Total HT</div>\n        <div>${formatCurrency(totalHt)}</div>\n      </div>\n      <div class=\"total-row\">\n        <div>TVA ${escapeHtml(tvaPercent)}%</div>\n        <div>${formatCurrency(montantTva)}</div>\n      </div>\n      <div class=\"total-row total-final\">\n        <div>Total TTC</div>\n        <div>${formatCurrency(totalTtc)}</div>\n      </div>\n    </div>\n  </div>\n\n  <div class=\"notice\">\n    Ce devis est établi sur la base des informations transmises.\n    Il reste soumis à disponibilité partenaire et validation commerciale.\n  </div>\n\n  <div class=\"footer\">\n    NeoTravel — Devis généré automatiquement — ${escapeHtml(quoteId)}\n  </div>\n</body>\n</html>\n`;\n\nconst updatedContext = {\n  ...context,\n  devis: {\n    ...devis,\n    quote_id: quoteId\n  },\n  pdf: {\n    ...(context.pdf || {}),\n    html_created: true,\n    html_created_at: now,\n    filename: fileName,\n    quote_id: quoteId\n  },\n  last_update_at: now\n};\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"HTML du devis généré.\",\n      context: updatedContext,\n      html,\n      result: {\n        entity: \"pdf\",\n        filename: fileName,\n        quote_id: quoteId\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        656,
+        0
+      ],
+      "id": "ecbd52e4-da12-4e9b-8b45-9d4eca1a3592",
+      "name": "Create_HTML_Devis"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\n\nconst input = $input.first()?.json || {};\nconst context = JSON.parse(JSON.stringify(input.context || {}));\nconst html = input.html || \"\";\n\nif (!html) {\n  return [\n    {\n      json: {\n        success: false,\n        message: \"Impossible de générer le PDF : HTML manquant.\",\n        context,\n        result: {\n          entity: \"pdf\",\n          errors: [\"html manquant\"]\n        }\n      }\n    }\n  ];\n}\n\nconst quoteId =\n  context.devis?.quote_id ||\n  context.pdf?.quote_id ||\n  `DEVIS-${context.airtable?.demande_record_id || Date.now()}`;\n\nconst htmlFilename = \"index.html\";\nconst pdfFilename = `${quoteId}.pdf`;\n\ncontext.pdf = {\n  ...(context.pdf || {}),\n  html_ready: true,\n  html_filename: htmlFilename,\n  filename: pdfFilename,\n  quote_id: quoteId,\n  engine: \"gotenberg\",\n  gotenberg: {\n    endpoint: \"http://gotenberg:3000/forms/chromium/convert/html\",\n    options: {\n      paperSize: \"A4\",\n      marginTop: \"10mm\",\n      marginBottom: \"10mm\",\n      marginLeft: \"10mm\",\n      marginRight: \"10mm\",\n      printBackground: \"true\",\n      landscape: \"false\",\n      scale: \"1\"\n    }\n  },\n  prepared_at: now\n};\n\nconst binary = await this.helpers.prepareBinaryData(\n  Buffer.from(html, \"utf8\"),\n  htmlFilename,\n  \"text/html\"\n);\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"HTML prêt pour conversion PDF.\",\n      context,\n      result: {\n        entity: \"pdf\",\n        filename: pdfFilename,\n        quote_id: quoteId\n      }\n    },\n    binary: {\n      data: binary\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ],
+      "id": "163d13e1-3f7f-48c7-8a27-4c8f0df87cc2",
+      "name": "Prepare_HTML_Binary"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.context.pdf.gotenberg.endpoint }}",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "files",
+              "inputDataFieldName": "data"
+            },
+            {
+              "name": "paperSize",
+              "value": "={{ $json.context.pdf.gotenberg.options.paperSize }}"
+            },
+            {
+              "name": "marginTop",
+              "value": "={{ $json.context.pdf.gotenberg.options.marginTop }}"
+            },
+            {
+              "name": "marginBottom",
+              "value": "={{ $json.context.pdf.gotenberg.options.marginBottom }}"
+            },
+            {
+              "name": "marginLeft",
+              "value": "={{ $json.context.pdf.gotenberg.options.marginLeft }}"
+            },
+            {
+              "name": "marginRight",
+              "value": "={{ $json.context.pdf.gotenberg.options.marginRight }}"
+            },
+            {
+              "name": "printBackground",
+              "value": "={{ $json.context.pdf.gotenberg.options.printBackground }}"
+            },
+            {
+              "name": "landscape",
+              "value": "={{ $json.context.pdf.gotenberg.options.landscape }}"
+            },
+            {
+              "name": "scale",
+              "value": "={{ $json.context.pdf.gotenberg.options.scale }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "pdf"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1104,
+        0
+      ],
+      "id": "10303dd0-9454-4ad6-867f-d0323fd2a08a",
+      "name": "Generate_PDF_Gotenberg"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\n\nconst input = $input.first();\nconst json = input.json || {};\nconst binary = input.binary || {};\n\nconst context = JSON.parse(JSON.stringify(json.context || {}));\nconst pdfBinary = binary.pdf || null;\n\nconst errors = [];\n\nif (!pdfBinary) {\n  errors.push(\"binary.pdf manquant\");\n}\n\nif (pdfBinary && pdfBinary.mimeType !== \"application/pdf\") {\n  errors.push(`mimeType invalide : ${pdfBinary.mimeType || \"inconnu\"}`);\n}\n\nif (pdfBinary && Number(pdfBinary.fileSize || 0) <= 0) {\n  errors.push(\"PDF vide\");\n}\n\nif (errors.length > 0) {\n  context.pdf = {\n    ...(context.pdf || {}),\n    generated: false,\n    error: \"PDF_GENERATION_FAILED\",\n    errors,\n    checked_at: now\n  };\n\n  return [\n    {\n      json: {\n        success: false,\n        message: \"Impossible de générer le devis PDF.\",\n        context,\n        result: {\n          entity: \"pdf\",\n          errors\n        }\n      },\n      binary\n    }\n  ];\n}\n\nconst quoteId =\n  context.devis?.quote_id ||\n  context.pdf?.quote_id ||\n  `DEVIS-${context.airtable?.demande_record_id || Date.now()}`;\n\nconst pdfFilename = `${quoteId}.pdf`;\n\ncontext.pdf = {\n  ...(context.pdf || {}),\n  generated: true,\n  generated_at: now,\n  filename: pdfFilename,\n  engine_filename: pdfBinary.fileName || null,\n  mime_type: pdfBinary.mimeType || null,\n  size: pdfBinary.fileSize || null,\n  engine: context.pdf?.engine || \"gotenberg\",\n  checked_at: now\n};\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"PDF généré avec succès.\",\n      context,\n      result: {\n        entity: \"pdf\",\n        filename: pdfFilename,\n        quote_id: quoteId\n      }\n    },\n    binary: {\n      pdf: pdfBinary\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        0
+      ],
+      "id": "ac1a2bb2-4a74-43d9-96ce-287a098c725f",
+      "name": "Check_PDF_Result"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// WF_008_Generate_PDF\n// Retour du Tool\n// Version : 3.0\n// Contrat de sortie standard NeoTravel\n// =======================================\n\nconst now = new Date().toISOString();\n\nconst input = $input.first()?.json || {};\nconst context = input.context || {};\n\n// =======================================\n// Erreur\n// =======================================\n\nif (input.success !== true) {\n\n  return [\n    {\n      json: {\n\n        success: false,\n\n        status: \"ERROR\",\n\n        tool: \"WF_008_Generate_PDF\",\n\n        version: \"3.0\",\n\n        timestamp: now,\n\n        context,\n\n        message: input.message || \"Impossible de générer le devis PDF.\",\n\n        next_action: \"error\",\n\n        next_workflow: \"\",\n\n        next_payload: {},\n\n        error: {\n          code: \"PDF_GENERATION_ERROR\",\n          details: input.message || \"Erreur lors de la génération du PDF.\"\n        }\n\n      }\n    }\n  ];\n\n}\n\n// =======================================\n// Succès\n// =======================================\n\nreturn [\n  {\n    json: {\n\n      success: true,\n\n      status: \"PDF_GENERATED\",\n\n      tool: \"WF_008_Generate_PDF\",\n\n      version: \"3.0\",\n\n      timestamp: now,\n\n      context,\n\n      message: \"Le devis PDF a été généré avec succès.\",\n\n      next_action: \"call_tool\",\n\n      next_workflow: \"WF_010_Send_Email\",\n\n      next_payload: {\n\n        context,\n\n        email_type: \"COMMERCIAL_VALIDATION\",\n\n        reason: \"Devis PDF généré automatiquement. Validation commerciale requise avant envoi au client.\"\n\n      },\n\n      error: null\n\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        0
+      ],
+      "id": "6592ffde-822c-43cd-b4e4-fcb0d12e645d",
+      "name": "Retour du Tool Generate_PDF"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "appHiQbjhDTbd6Bzy",
+          "mode": "list",
+          "cachedResultName": "NeoTravel",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbld9UwclutpI5oSV",
+          "mode": "list",
+          "cachedResultName": "Devis",
+          "cachedResultUrl": "https://airtable.com/appHiQbjhDTbd6Bzy/tbld9UwclutpI5oSV"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "PDF": "={{ $('Upload file').item.json.webViewLink }}",
+            "Statut devis": "En attente de validation commerciale",
+            "Quote_Id": "={{ $('Check_PDF_Result').item.json.context.airtable.quote_id }}"
+          },
+          "matchingColumns": [
+            "Quote_Id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Devis ID",
+              "displayName": "Devis ID",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Quote_Id",
+              "displayName": "Quote_Id",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Formule utilisée",
+              "displayName": "Formule utilisée",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Prix HT",
+              "displayName": "Prix HT",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Marge (%)",
+              "displayName": "Marge (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Montant marge",
+              "displayName": "Montant marge",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Remise (%)",
+              "displayName": "Remise (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Montant remise",
+              "displayName": "Montant remise",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "TVA (%)",
+              "displayName": "TVA (%)",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Sous-total HT",
+              "displayName": "Sous-total HT",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Montant TVA",
+              "displayName": "Montant TVA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Prix TTC",
+              "displayName": "Prix TTC",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "PDF",
+              "displayName": "PDF",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Date génération",
+              "displayName": "Date génération",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Statut devis",
+              "displayName": "Statut devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "En attente de validation commerciale",
+                  "value": "En attente de validation commerciale"
+                },
+                {
+                  "name": "Devis validé",
+                  "value": "Devis validé"
+                },
+                {
+                  "name": "Modification demandée",
+                  "value": "Modification demandée"
+                },
+                {
+                  "name": "en attente retour client",
+                  "value": "en attente retour client"
+                },
+                {
+                  "name": "Relance 1",
+                  "value": "Relance 1"
+                },
+                {
+                  "name": "Relance 2",
+                  "value": "Relance 2"
+                },
+                {
+                  "name": "Accepté par le client",
+                  "value": "Accepté par le client"
+                },
+                {
+                  "name": "Refusé par le client",
+                  "value": "Refusé par le client"
+                },
+                {
+                  "name": "Expiré",
+                  "value": "Expiré"
+                },
+                {
+                  "name": "Annulé",
+                  "value": "Annulé"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Commentaires de modifications de devis",
+              "displayName": "Commentaires de modifications de devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date d'envoi du devis",
+              "displayName": "Date d'envoi du devis",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date relance 1",
+              "displayName": "Date relance 1",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Date relance 2",
+              "displayName": "Date relance 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Lien vers Demandes",
+              "displayName": "Lien vers Demandes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "WF011_traite",
+              "displayName": "WF011_traite",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Demandes",
+              "displayName": "Demandes",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Demandes 2",
+              "displayName": "Demandes 2",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Demandes 3",
+              "displayName": "Demandes 3",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1776,
+        0
+      ],
+      "id": "40b08962-ea5d-45fa-b063-149bd9ceaea5",
+      "name": "Update record",
+      "credentials": {
+        "airtableTokenApi": {
+          "id": "LECMyiH6toHP6H9n",
+          "name": "Airtable Personal Access Token account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "pdf",
+        "name": "={{ $json.context.devis.quote_id + \".pdf\" }}",
+        "driveId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "My Drive"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1l8s5RlQUsniL__ZyqYAK0PqBDBlwobTo",
+          "mode": "list",
+          "cachedResultName": "NeoTravel_Groupe_17",
+          "cachedResultUrl": "https://drive.google.com/drive/folders/1l8s5RlQUsniL__ZyqYAK0PqBDBlwobTo"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        1552,
+        0
+      ],
+      "id": "752df04b-c207-49d8-9b96-4e59f28e7988",
+      "name": "Upload file",
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "vDcL2ylf4VudLSI8",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\n\nconst airtableResult = $input.first()?.json || {};\n\nlet previous = {};\nlet drive = {};\n\ntry {\n  previous = $(\"Check_PDF_Result\").first().json || {};\n} catch (e) {\n  previous = {};\n}\n\ntry {\n  drive = $(\"Upload file\").first().json || {};\n} catch (e) {\n  drive = {};\n}\n\nconst context = JSON.parse(JSON.stringify(previous.context || {}));\n\nconst success = !!airtableResult.id;\n\nif (!success) {\n  context.pdf = {\n    ...(context.pdf || {}),\n    saved_to_airtable: false,\n    error: \"AIRTABLE_UPDATE_FAILED\",\n    checked_at: now\n  };\n\n  context.last_update_at = now;\n\n  return [\n    {\n      json: {\n        success: false,\n        message: \"Le PDF a été généré mais la mise à jour Airtable a échoué.\",\n        context,\n        result: {\n          entity: \"pdf\",\n          errors: [\"AIRTABLE_UPDATE_FAILED\"]\n        }\n      }\n    }\n  ];\n}\n\ncontext.pdf = {\n  ...(context.pdf || {}),\n  saved_to_drive: !!drive.id,\n  saved_to_airtable: true,\n  saved_to_airtable_at: now,\n  drive_file_id: drive.id || null,\n  drive_filename: drive.name || context.pdf?.filename || null,\n  drive_view_url: drive.webViewLink || null,\n  drive_download_url: drive.webContentLink || null,\n  airtable_record_id: airtableResult.id,\n  airtable_fields: airtableResult.fields || {}\n};\n\ncontext.last_update_at = now;\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"PDF généré, envoyé sur Drive et enregistré dans Airtable.\",\n      context,\n      result: {\n        entity: \"pdf\",\n        pdf_url: context.pdf.drive_view_url,\n        drive_file_id: context.pdf.drive_file_id\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        0
+      ],
+      "id": "de3f5c01-e2a4-440d-bb53-a4ea55824cd8",
+      "name": "Check_Airtable_Update"
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date().toISOString();\n\nconst input = $input.first()?.json || {};\nconst context = input.context || {};\n\nfunction isObject(value) {\n  return value && typeof value === \"object\" && !Array.isArray(value);\n}\n\nfunction isEmpty(value) {\n  return (\n    value === undefined ||\n    value === null ||\n    value === \"\" ||\n    String(value).trim() === \"\"\n  );\n}\n\nconst errors = [];\n\nif (!isObject(context)) {\n  errors.push(\"context manquant ou invalide\");\n}\n\nif (isEmpty(context.airtable?.demande_record_id)) {\n  errors.push(\"context.airtable.demande_record_id manquant\");\n}\n\nif (isEmpty(context.devis?.airtable_record_id)) {\n  errors.push(\"context.devis.airtable_record_id manquant\");\n}\n\nif (!isObject(context.client)) {\n  errors.push(\"context.client manquant\");\n}\n\nif (!isObject(context.trajet)) {\n  errors.push(\"context.trajet manquant\");\n}\n\nif (!isObject(context.devis)) {\n  errors.push(\"context.devis manquant\");\n}\n\nif (isEmpty(context.client?.nom)) {\n  errors.push(\"context.client.nom manquant\");\n}\n\nif (isEmpty(context.client?.email)) {\n  errors.push(\"context.client.email manquant\");\n}\n\nif (isEmpty(context.trajet?.depart)) {\n  errors.push(\"context.trajet.depart manquant\");\n}\n\nif (isEmpty(context.trajet?.destination)) {\n  errors.push(\"context.trajet.destination manquant\");\n}\n\nif (isEmpty(context.trajet?.date_depart)) {\n  errors.push(\"context.trajet.date_depart manquant\");\n}\n\nif (isEmpty(context.trajet?.nb_passagers)) {\n  errors.push(\"context.trajet.nb_passagers manquant\");\n}\n\nif (isEmpty(context.devis?.total_ht)) {\n  errors.push(\"context.devis.total_ht manquant\");\n}\n\nif (isEmpty(context.devis?.total_ttc)) {\n  errors.push(\"context.devis.total_ttc manquant\");\n}\n\nif (errors.length > 0) {\n  return [\n    {\n      json: {\n        success: false,\n        message: \"Impossible de générer le devis PDF : données manquantes.\",\n        context,\n        result: {\n          entity: \"pdf\",\n          errors\n        }\n      }\n    }\n  ];\n}\n\nconst quoteId =\n  context.devis?.quote_id ||\n  `DEVIS-${context.airtable.demande_record_id}`;\n\nconst updatedContext = {\n  ...context,\n  devis: {\n    ...context.devis,\n    quote_id: quoteId\n  },\n  pdf: {\n    ...(context.pdf || {}),\n    generation_started_at: now,\n    generated: false\n  },\n  last_update_at: now\n};\n\nreturn [\n  {\n    json: {\n      success: true,\n      message: \"Contexte validé pour génération PDF.\",\n      context: updatedContext,\n      result: {\n        entity: \"pdf\"\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        432,
+        0
+      ],
+      "id": "7a8b703f-3afd-4721-8d38-e511365ced61",
+      "name": "Validation du contexte Generate_PDF"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Validation du contexte Generate_PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create_HTML_Devis": {
+      "main": [
+        [
+          {
+            "node": "Prepare_HTML_Binary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare_HTML_Binary": {
+      "main": [
+        [
+          {
+            "node": "Generate_PDF_Gotenberg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate_PDF_Gotenberg": {
+      "main": [
+        [
+          {
+            "node": "Check_PDF_Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check_PDF_Result": {
+      "main": [
+        [
+          {
+            "node": "Upload file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Retour du Tool Generate_PDF": {
+      "main": [
+        []
+      ]
+    },
+    "Upload file": {
+      "main": [
+        [
+          {
+            "node": "Update record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update record": {
+      "main": [
+        [
+          {
+            "node": "Check_Airtable_Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check_Airtable_Update": {
+      "main": [
+        [
+          {
+            "node": "Retour du Tool Generate_PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validation du contexte Generate_PDF": {
+      "main": [
+        [
+          {
+            "node": "Create_HTML_Devis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "43cc0867-06da-43f6-8aaf-37e28b5cfa51",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "792146814beec0d92fea6db4c331074840e1a8375a2fa880d46b9cafae578ac4"
+  },
+  "nodeGroups": [],
+  "id": "nVALr6h5XkARSlp0",
+  "tags": []
+}
