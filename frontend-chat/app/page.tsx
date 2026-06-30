@@ -21,7 +21,7 @@ const devisItems = ["Devis en préparation", "Devis envoyés"];
 const VALID_ID = "EquipeNeotravel";
 const VALID_MP = "Groupe17@!epitechwesh!";
 
-const WEBHOOK_URL = "http://localhost:5678/webhook/neotravel-mvp";
+const WEBHOOK_URL = "https://teams.microsoft.com/l/message/19:d4fe0ae50c0d48a3b3d04a4b44212370@thread.v2/1782841107584?context=%7B%22contextType%22%3A%22chat%22%7D";
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
