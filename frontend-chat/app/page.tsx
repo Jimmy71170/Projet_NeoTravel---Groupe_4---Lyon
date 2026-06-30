@@ -39,7 +39,7 @@ export default function Home() {
   const [loginError, setLoginError] = useState("");
 
   const WEBHOOK_URL =
-    "https://mango-sublet-slept.ngrok-free.dev/webhook/DPWEKRhln0Nuseii";
+    "https://mango-sublet-slept.ngrok-free.dev/workflow/DPWEKRhln0Nuseii";
 
   async function sendMessage() {
     if (!input.trim() || loading) return;
