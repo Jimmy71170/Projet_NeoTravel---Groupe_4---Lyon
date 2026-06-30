@@ -300,12 +300,23 @@ export default function Home() {
           )}
 
           {activeTab === "devis" && (
-            <div className="flex-1 p-6 bg-white/35">
-              <div className="rounded-2xl px-4 py-3 border border-white/50 bg-white/70">
-                <p className="font-semibold text-[#123b37]">
-                  {signedIn ? "🧾 Vos devis" : "🔒 Connectez-vous pour voir vos devis"}
-                </p>
-              </div>
+            <div className="flex-1 overflow-y-auto p-6 bg-white/35 flex flex-col gap-3">
+              {!signedIn ? (
+                <div className="rounded-2xl px-4 py-3 border border-white/50 bg-white/70">
+                  <p className="font-semibold text-[#123b37]">
+                    🔒 Connectez-vous pour voir vos devis
+                  </p>
+                </div>
+              ) : (
+                devisItems.map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-2xl px-4 py-3 border border-white/50 bg-white/70"
+                  >
+                    <p className="font-semibold text-[#123b37]">📄 {item}</p>
+                  </div>
+                ))
+              )}
             </div>
           )}
 
