@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   n8n:
     image: n8nio/n8n:latest
@@ -15,6 +17,29 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - WEBHOOK_URL=http://localhost:5678/
+      - N8N_PROXY_HOPS=1
 
     volumes:
       - ./data:/home/node/.n8n
+
+    depends_on:
+      - gotenberg
+
+    networks:
+      - neotravel
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: neotravel-gotenberg
+
+    restart: unless-stopped
+
+    ports:
+      - "3000:3000"
+
+    networks:
+      - neotravel
+
+networks:
+  neotravel:
+    driver: bridge
