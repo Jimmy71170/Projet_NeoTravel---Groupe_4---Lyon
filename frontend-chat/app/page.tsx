@@ -163,7 +163,7 @@ export default function Home() {
         <div className="flex-1 overflow-y-auto p-4 space-y-5 text-[#123b37]">
           <div className={signedIn ? "" : "opacity-40 pointer-events-none"}>
             <p className="hidden group-hover:block text-xs uppercase tracking-[0.18em] text-[#0b766f]/70 font-bold mb-2">
-              Conversations 🔒
+              Historique Conversations 🔒
             </p>
 
             {conversations.map((item) => (
