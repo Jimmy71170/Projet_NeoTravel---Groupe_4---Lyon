@@ -21,6 +21,8 @@ const devisItems = ["Devis en préparation", "Devis envoyés"];
 const VALID_ID = "EquipeNeotravel";
 const VALID_MP = "Groupe17@!epitechwesh!";
 
+const WEBHOOK_URL = "https://TON-N8N.app.n8n.cloud/webhook/neotravel-mvp";
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -38,13 +40,11 @@ export default function Home() {
   const [loginMp, setLoginMp] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  const WEBHOOK_URL =
-    "http://localhost:5678/webhook/neotravel-mvp";
-
   async function sendMessage() {
     if (!input.trim() || loading) return;
 
     const text = input.trim();
+
     setMessages((prev) => [...prev, { role: "user", text }]);
     setInput("");
     setLoading(true);
@@ -54,9 +54,10 @@ export default function Home() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "ngrok-skip-browser-warning": "true",
         },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({
+          message: text,
+        }),
       });
 
       if (!res.ok) {
@@ -65,11 +66,20 @@ export default function Home() {
 
       const data = await res.json();
 
+      const botReply =
+        data.output ||
+        data.reply ||
+        data.response ||
+        data.reponse ||
+        data.message ||
+        data.text ||
+        "Réponse reçue.";
+
       setMessages((prev) => [
         ...prev,
         {
           role: "bot",
-          text: text:  data.reply || data.output || data.text || data.reponse || data.response || data.message || "Réponse reçue.",data.reponse || data.response || data.message || "Réponse reçue.",
+          text: botReply,
         },
       ]);
     } catch {
@@ -101,15 +111,15 @@ export default function Home() {
 
   return (
     <main
-  className="w-screen h-screen relative overflow-hidden pt-[96px]"
-  style={{
-    backgroundImage: "url('/background.png')",
-    backgroundPosition: "72px 96px",
-    backgroundSize: "calc(100vw - 72px) calc(100vh - 96px)",
-    backgroundRepeat: "no-repeat",
-    backgroundColor: "#fff7ea",
-  }}
->
+      className="w-screen h-screen relative overflow-hidden pt-[96px]"
+      style={{
+        backgroundImage: "url('/background.png')",
+        backgroundPosition: "72px 96px",
+        backgroundSize: "calc(100vw - 72px) calc(100vh - 96px)",
+        backgroundRepeat: "no-repeat",
+        backgroundColor: "#fff7ea",
+      }}
+    >
       <header className="fixed top-0 left-0 z-30 w-full h-[96px] bg-[#fff7ea]/90 backdrop-blur-md border-b border-white/50 shadow-sm">
         <div className="h-full px-12 flex items-center justify-between">
           <div className="flex items-center gap-6">
@@ -132,11 +142,21 @@ export default function Home() {
           </div>
 
           <nav className="hidden md:flex items-center gap-10 text-[#0b766f] font-semibold">
-            <a href="/" className="hover:text-[#b55309] transition">Accueil</a>
-            <a href="/apropos#services" className="hover:text-[#b55309] transition">Services</a>
-            <a href="/apropos#a-propos" className="hover:text-[#b55309] transition">À propos</a>
-            <a href="/apropos#contact" className="hover:text-[#b55309] transition">Contact</a>
-            <a href="/mentions-legales" className="hover:text-[#b55309] transition">Mentions légales</a>
+            <a href="/" className="hover:text-[#b55309] transition">
+              Accueil
+            </a>
+            <a href="/apropos#services" className="hover:text-[#b55309] transition">
+              Services
+            </a>
+            <a href="/apropos#a-propos" className="hover:text-[#b55309] transition">
+              À propos
+            </a>
+            <a href="/apropos#contact" className="hover:text-[#b55309] transition">
+              Contact
+            </a>
+            <a href="/mentions-legales" className="hover:text-[#b55309] transition">
+              Mentions légales
+            </a>
           </nav>
         </div>
       </header>
@@ -345,13 +365,15 @@ export default function Home() {
             className="bg-white rounded-3xl shadow-2xl max-w-[420px] w-[90%] p-6"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="text-lg font-bold text-[#0b766f]">🔐 Se connecter</h2>
+            <h2 className="text-lg font-bold text-[#0b766f]">
+              🔐 Se connecter
+            </h2>
 
             <div className="mt-5 flex flex-col gap-3">
               <input
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
-                placeholder="Identifiant (ex:EquipeNeotravel))"
+                placeholder="Identifiant"
                 className="border border-[#e6d8c8] rounded-xl px-3 py-2 text-sm outline-none"
               />
 
@@ -359,7 +381,7 @@ export default function Home() {
                 type="password"
                 value={loginMp}
                 onChange={(e) => setLoginMp(e.target.value)}
-                placeholder="Mot de passe (ex: Groupe17@!epitechwesh!)"
+                placeholder="Mot de passe"
                 className="border border-[#e6d8c8] rounded-xl px-3 py-2 text-sm outline-none"
               />
             </div>
