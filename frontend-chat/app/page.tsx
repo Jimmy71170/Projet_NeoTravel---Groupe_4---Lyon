@@ -373,7 +373,7 @@ export default function Home() {
               <input
                 value={loginId}
                 onChange={(e) => setLoginId(e.target.value)}
-                placeholder="Identifiant"
+                placeholder="Identifiant (ex: EquipeNeotravel)"
                 className="border border-[#e6d8c8] rounded-xl px-3 py-2 text-sm outline-none"
               />
 
@@ -381,7 +381,7 @@ export default function Home() {
                 type="password"
                 value={loginMp}
                 onChange={(e) => setLoginMp(e.target.value)}
-                placeholder="Mot de passe"
+                placeholder="Mot de passe (ex: Groupe17@!epitechwesh!)"
                 className="border border-[#e6d8c8] rounded-xl px-3 py-2 text-sm outline-none"
               />
             </div>
