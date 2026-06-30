@@ -1,10 +1,24 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 type Message = {
   role: "user" | "bot";
   text: string;
+};
+
+type NeoTravelContext = Record<string, unknown> | null;
+
+type WebhookResponse = {
+  output?: unknown;
+  reply?: unknown;
+  response?: unknown;
+  reponse?: unknown;
+  message?: unknown;
+  text?: unknown;
+  session_id?: string;
+  sessionId?: string;
+  context?: NeoTravelContext;
 };
 
 type Tab = "assistant" | "devis" | "voyages";
@@ -23,6 +37,34 @@ const VALID_MP = "Groupe17@!epitechwesh!";
 
 const WEBHOOK_URL = "http://localhost:5678/webhook/neotravel-mvp";
 
+function createSessionId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `session_${Date.now()}`;
+}
+
+function extractReply(value: unknown): string {
+  if (typeof value === "string") return value;
+
+  if (value && typeof value === "object") {
+    const data = value as Record<string, unknown>;
+
+    return extractReply(
+      data.output ??
+        data.reply ??
+        data.response ??
+        data.reponse ??
+        data.message ??
+        data.text ??
+        "Réponse reçue."
+    );
+  }
+
+  return "Réponse reçue.";
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -39,6 +81,41 @@ export default function Home() {
   const [loginId, setLoginId] = useState("");
   const [loginMp, setLoginMp] = useState("");
   const [loginError, setLoginError] = useState("");
+  const [sessionId, setSessionId] = useState(createSessionId);
+  const [context, setContext] = useState<NeoTravelContext>(null);
+
+  useEffect(() => {
+    const savedSessionId = window.localStorage.getItem("neotravel_session_id");
+    const savedContext = window.localStorage.getItem("neotravel_context");
+
+    if (savedSessionId) {
+      setSessionId(savedSessionId);
+    }
+
+    if (savedContext) {
+      try {
+        setContext(JSON.parse(savedContext));
+      } catch {
+        window.localStorage.removeItem("neotravel_context");
+      }
+    }
+  }, []);
+
+  function resetConversation() {
+    const newSessionId = createSessionId();
+
+    setSessionId(newSessionId);
+    setContext(null);
+    window.localStorage.setItem("neotravel_session_id", newSessionId);
+    window.localStorage.removeItem("neotravel_context");
+
+    setMessages([
+      {
+        role: "bot",
+        text: "Bonjour 👋 Décrivez votre besoin : lieu de départ, destination, date, nombre de passagers et type de trajet.",
+      },
+    ]);
+  }
 
   async function sendMessage() {
     if (!input.trim() || loading) return;
@@ -57,6 +134,8 @@ export default function Home() {
         },
         body: JSON.stringify({
           message: text,
+          session_id: sessionId,
+          context,
         }),
       });
 
@@ -64,16 +143,21 @@ export default function Home() {
         throw new Error("Erreur webhook");
       }
 
-      const data = await res.json();
+      const data = (await res.json()) as WebhookResponse;
 
-      const botReply =
-        data.output ||
-        data.reply ||
-        data.response ||
-        data.reponse ||
-        data.message ||
-        data.text ||
-        "Réponse reçue.";
+      const nextSessionId = data.session_id || data.sessionId || sessionId;
+
+      if (nextSessionId) {
+        setSessionId(nextSessionId);
+        window.localStorage.setItem("neotravel_session_id", nextSessionId);
+      }
+
+      if (data.context) {
+        setContext(data.context);
+        window.localStorage.setItem("neotravel_context", JSON.stringify(data.context));
+      }
+
+      const botReply = extractReply(data);
 
       setMessages((prev) => [
         ...prev,
@@ -166,12 +250,7 @@ export default function Home() {
           <button
             onClick={() => {
               setActiveTab("assistant");
-              setMessages([
-                {
-                  role: "bot",
-                  text: "Bonjour 👋 Décrivez votre besoin : lieu de départ, destination, date, nombre de passagers et type de trajet.",
-                },
-              ]);
+              resetConversation();
             }}
             className="w-full bg-[#0b766f] text-white rounded-xl py-3 font-semibold hover:bg-[#095f59] transition"
           >
