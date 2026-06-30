@@ -69,7 +69,7 @@ export default function Home() {
         ...prev,
         {
           role: "bot",
-          text: data.reponse || data.response || data.message || "Réponse reçue.",
+          text: text:  data.reply || data.output || data.text || data.reponse || data.response || data.message || "Réponse reçue.",data.reponse || data.response || data.message || "Réponse reçue.",
         },
       ]);
     } catch {
