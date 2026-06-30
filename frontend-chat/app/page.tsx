@@ -100,7 +100,16 @@ export default function Home() {
   }
 
   return (
-    <main className="w-screen h-screen relative overflow-hidden pt-[96px]">
+    <main
+  className="w-screen h-screen relative overflow-hidden pt-[96px]"
+  style={{
+    backgroundImage: "url('/background.png')",
+    backgroundPosition: "72px 96px",
+    backgroundSize: "calc(100vw - 72px) calc(100vh - 96px)",
+    backgroundRepeat: "no-repeat",
+    backgroundColor: "#fff7ea",
+  }}
+>
       <header className="fixed top-0 left-0 z-30 w-full h-[96px] bg-[#fff7ea]/90 backdrop-blur-md border-b border-white/50 shadow-sm">
         <div className="h-full px-12 flex items-center justify-between">
           <div className="flex items-center gap-6">
